@@ -42,14 +42,21 @@ class RecoveryKey(models.Model):
 
 class Group(models.Model):
     group_name = models.CharField(max_length=100)
-    owner_id = models.ForeignKey('User', on_delete=models.CASCADE)
-    group_raw_avg = models.FloatField(null=True, default=None)
-    group_raw_min = models.IntegerField(null=True, default=None)
-    group_raw_max = models.IntegerField(null=True, default=None)
-    group_mod_avg = models.FloatField(null=True, default=None)
-    group_mod_min = models.IntegerField(null=True, default=None)
-    group_mod_max = models.IntegerField(null=True, default=None)
+    owner = models.ForeignKey('User', on_delete=models.CASCADE)
 
 
 class Character(models.Model):
-    pass
+    character_name = models.CharField(max_length=100)
+    character_note = models.CharField(max_length=256, blank=True)
+    group = models.ForeignKey('Group', on_delete=models.CASCADE)
+    is_npc = models.BooleanField(default=False)
+
+class Roll(models.Model):
+    character = models.ForeignKey('Character', on_delete=models.CASCADE)
+    group = models.ForeignKey('Group', on_delete=models.CASCADE)
+    roll_input = models.JSONField(default=list)
+    roll_value = models.IntegerField()
+    raw_dice_rolls = models.JSONField(default=dict)
+
+
+
