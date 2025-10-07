@@ -79,11 +79,18 @@ WSGI_APPLICATION = 'kobold_keeper.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'kobold_vault',
+        'USER': 'kobold_keeper',
+        'TEST': {
+            'NAME': 'kobold_test'
+        }
     }
 }
 
+
+AUTH_USER_MODEL = 'kobold_keeper.User'
+LOGIN_URL = '/login'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -109,7 +116,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'CET'
 
 USE_I18N = True
 
