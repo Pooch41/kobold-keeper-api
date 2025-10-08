@@ -27,7 +27,11 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser):
     user_name = models.CharField(max_length=30)
     is_active = models.BooleanField(default=True)
+
+    #checks if the user is moderator
     is_staff = models.BooleanField(default=False)
+
+    #checks if the user is administrator
     is_superuser = models.BooleanField(default=False)
 
     objects = UserManager()
@@ -38,10 +42,12 @@ class User(AbstractBaseUser):
 
 class RecoveryKey(models.Model):
     user = models.OneToOneField('User', on_delete=models.CASCADE, primary_key=True)
+    # key to recover password, essentially second password TODO: hash this too
     recovery_key = models.CharField(max_length=10, unique=True, default=utils.generate_unique_key)
 
 class Group(models.Model):
     group_name = models.CharField(max_length=100)
+    # 1-1 group-owner, characters attached to group
     owner = models.ForeignKey('User', on_delete=models.CASCADE)
 
 
@@ -49,13 +55,21 @@ class Character(models.Model):
     character_name = models.CharField(max_length=100)
     character_note = models.CharField(max_length=256, blank=True)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
+
+    #allows DM to mark NPCs
     is_npc = models.BooleanField(default=False)
 
 class Roll(models.Model):
     character = models.ForeignKey('Character', on_delete=models.CASCADE)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
-    roll_input = models.JSONField(default=list)
+
+    #roll formula
+    roll_input = models.CharField(max_length=512)
+
+    #calculated roll total
     roll_value = models.IntegerField()
+
+    #only dice rolls, separately ({"dice_type": [roll1, roll2...]})
     raw_dice_rolls = models.JSONField(default=dict)
 
 
