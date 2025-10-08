@@ -49,11 +49,6 @@ class CharacterSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def __init__(self, *args, **kwargs):
-        """
-        Dynamically filters the 'group' queryset to ensure a user can only
-        create/edit characters in groups they own. This prevents users from
-        spoofing another owner's group ID.
-        """
         super().__init__(*args, **kwargs)
         if 'request' in self.context:
             request = self.context['request']
