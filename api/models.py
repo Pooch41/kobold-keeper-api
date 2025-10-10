@@ -1,9 +1,8 @@
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.hashers import make_password, check_password
-from django.conf import settings
 from django.db import models
 
-import utils
 
 class UserManager(BaseUserManager):
     def create_user(self, user_name: str, password=None, **extra_fields):
@@ -30,10 +29,10 @@ class User(AbstractBaseUser):
     user_name = models.CharField(max_length=30)
     is_active = models.BooleanField(default=True)
 
-    #checks if the user is moderator
+    # checks if the user is moderator
     is_staff = models.BooleanField(default=False)
 
-    #checks if the user is administrator
+    # checks if the user is administrator
     is_superuser = models.BooleanField(default=False)
 
     objects = UserManager()
@@ -73,7 +72,7 @@ class Character(models.Model):
     character_note = models.CharField(max_length=256, blank=True)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
 
-    #allows DM to mark NPCs
+    # allows DM to mark NPCs
     is_npc = models.BooleanField(default=False)
 
 
@@ -81,11 +80,11 @@ class Roll(models.Model):
     character = models.ForeignKey('Character', on_delete=models.CASCADE)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
 
-    #roll formula
+    # roll formula
     roll_input = models.CharField(max_length=512)
 
-    #calculated roll total
+    # calculated roll total
     roll_value = models.IntegerField()
 
-    #only dice rolls, separately ({"dice_type": [roll1, roll2...]})
+    # only dice rolls, separately ({"dice_type": [roll1, roll2...]})
     raw_dice_rolls = models.JSONField(default=dict)

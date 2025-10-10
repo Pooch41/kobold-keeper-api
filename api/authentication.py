@@ -1,9 +1,9 @@
 from django.contrib.auth import authenticate, get_user_model
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from django.contrib.auth.hashers import check_password
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from django.contrib.auth.hashers import check_password
 
 from .models import RecoveryKey
 
@@ -68,4 +68,3 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
 
 class PasswordResetWithKeyView(TokenObtainPairView):
     serializer_class = PasswordResetWithKeySerializer
-
