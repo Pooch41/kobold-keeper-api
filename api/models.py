@@ -1,4 +1,6 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.hashers import make_password, check_password
+from django.conf import settings
 from django.db import models
 
 import utils
@@ -41,9 +43,24 @@ class User(AbstractBaseUser):
 
 
 class RecoveryKey(models.Model):
-    user = models.OneToOneField('User', on_delete=models.CASCADE, primary_key=True)
-    # key to recover password, essentially second password TODO: hash this too
-    recovery_key = models.CharField(max_length=10, unique=True, default=utils.generate_unique_key)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True
+    )
+
+    recovery_key_hash = models.CharField(max_length=128, unique=True)
+
+    def set_key(self, raw_key):
+        self.recovery_key_hash = make_password(raw_key)
+
+    def check_key(self, raw_key):
+        return check_password(raw_key, self.recovery_key_hash)
+
+    class Meta:
+        db_table = 'recovery_keys'
+        verbose_name = 'Recovery Key'
+
 
 class Group(models.Model):
     group_name = models.CharField(max_length=100)
