@@ -14,8 +14,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'user_name', 'password', 'raw_recovery_key']
-        read_only_fields = ['id']
+        fields = ['user_name', 'password', 'raw_recovery_key']
 
     def create(self, validated_data):
         with transaction.atomic():
