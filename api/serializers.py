@@ -1,22 +1,32 @@
 from rest_framework import serializers
+from django.db import transaction
+from .models import User, Group, Character, Roll, RecoveryKey
+from .utils import generate_key
 
-from api.models import Group, Roll, User, Character
-from api.dice_roller import DiceRoller, InvalidRollFormula
 
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True,
+                                     required=True,
+                                     style={'input_type': 'password'}
+                                     )
+
+    raw_recovery_key = serializers.CharField(max_length=10, read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'user_name', 'password']
-        read_only_fields = ['id']
+        fields = ['user_name', 'password', 'raw_recovery_key']
 
     def create(self, validated_data):
-        user = User.objects.create_user(
-            user_name=validated_data['user_name'],
-            password=validated_data['password']
-        )
-        return user
+        with transaction.atomic():
+            password = validated_data.pop('password')
+            raw_key = generate_key()
+            user = User.objects.create_user(**validated_data, password=password)
+            recovery_key_instance = RecoveryKey.objects.create(user=user)
+            recovery_key_instance.set_key(raw_key)
+            recovery_key_instance.save()
+            user.raw_recovery_key = raw_key
+
+            return user
 
 class GroupSerializer(serializers.ModelSerializer):
     owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
