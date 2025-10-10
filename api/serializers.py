@@ -39,9 +39,26 @@ class GroupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ['id', 'group_name', 'owner', 'characters',
-                  '_group_raw_avg', '_group_mod_avg']
-        read_only_fields = ['id', 'owner', '_group_raw_avg', '_group_mod_avg']
+        fields = ['id',
+                  'group_name',
+                  'owner',
+                  'characters',
+                  '_group_raw_avg',
+                  '_group_crit_fail_count',
+                  '_group_crit_success_count',
+                  '_group_mod_avg',
+                  '_group_mod_min',
+                  '_group_mod_max',
+                  ]
+        read_only_fields = ['id',
+                  'owner',
+                  '_group_raw_avg',
+                  '_group_crit_success_count',
+                  '-group_crit_count',
+                  '_group_mod_avg',
+                  '_group_mod_min',
+                  '_group_mod_max',
+                  ]
 
 
 class CharacterSerializer(serializers.ModelSerializer):
