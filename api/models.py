@@ -76,6 +76,7 @@ class Character(models.Model):
     #allows DM to mark NPCs
     is_npc = models.BooleanField(default=False)
 
+
 class Roll(models.Model):
     character = models.ForeignKey('Character', on_delete=models.CASCADE)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)

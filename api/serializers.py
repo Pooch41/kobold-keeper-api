@@ -39,9 +39,26 @@ class GroupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ['id', 'group_name', 'owner', 'characters',
-                  '_group_raw_avg', '_group_mod_avg']
-        read_only_fields = ['id', 'owner', '_group_raw_avg', '_group_mod_avg']
+        fields = ['id',
+                  'group_name',
+                  'owner',
+                  'characters',
+                  '_group_raw_avg',
+                  '_group_crit_fail_count',
+                  '_group_crit_success_count',
+                  '_group_mod_avg',
+                  '_group_mod_min',
+                  '_group_mod_max',
+                  ]
+        read_only_fields = ['id',
+                  'owner',
+                  '_group_raw_avg',
+                  '_group_crit_success_count',
+                  '-group_crit_count',
+                  '_group_mod_avg',
+                  '_group_mod_min',
+                  '_group_mod_max',
+                  ]
 
 
 class CharacterSerializer(serializers.ModelSerializer):
@@ -51,12 +68,26 @@ class CharacterSerializer(serializers.ModelSerializer):
         model = Character
         fields = [
             'id',
+            'user',
             'character_name',
             'character_note',
+            '_raw_avg',
+            '_crit_fail_count',
+            '_crit_success_count',
+            '_mod_avg',
+            '_mod_min',
+            '_mod_max',
             'is_npc',
             'group'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id',
+                            'user',
+                            '_raw_avg',
+                            '_crit_fail_count',
+                            '_crit_success_count',
+                            '_mod_avg',
+                            '_mod_min',
+                            '_mod_max']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
