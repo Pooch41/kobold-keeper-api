@@ -89,6 +89,3 @@ class Roll(models.Model):
 
     #only dice rolls, separately ({"dice_type": [roll1, roll2...]})
     raw_dice_rolls = models.JSONField(default=dict)
-
-
-
