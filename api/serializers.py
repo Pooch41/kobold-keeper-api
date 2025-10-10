@@ -68,12 +68,26 @@ class CharacterSerializer(serializers.ModelSerializer):
         model = Character
         fields = [
             'id',
+            'user',
             'character_name',
             'character_note',
+            '_raw_avg',
+            '_crit_fail_count',
+            '_crit_success_count',
+            '_mod_avg',
+            '_mod_min',
+            '_mod_max',
             'is_npc',
             'group'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id',
+                            'user',
+                            '_raw_avg',
+                            '_crit_fail_count',
+                            '_crit_success_count',
+                            '_mod_avg',
+                            '_mod_min',
+                            '_mod_max']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
