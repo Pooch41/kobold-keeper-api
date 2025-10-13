@@ -42,6 +42,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+
+    'kobold_keeper.apps.KoboldKeeperConfig',
+    'api'
 ]
 
 MIDDLEWARE = [
@@ -89,7 +93,7 @@ DATABASES = {
 }
 
 
-AUTH_USER_MODEL = 'kobold_keeper.User'
+AUTH_USER_MODEL = 'api.User'
 LOGIN_URL = '/login'
 
 # Password validation

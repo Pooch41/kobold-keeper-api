@@ -1,51 +1,62 @@
 from django.conf import settings
-from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.utils import timezone
 
 
-class UserManager(BaseUserManager):
-    def create_user(self, user_name: str, password=None, **extra_fields):
-        if not user_name:
-            raise ValueError("Users must have a unique, non-blank username!")
-
-        user = self.model(user_name=user_name, **extra_fields)
+class CustomUserManager(BaseUserManager):
+    def create_user(self, username, password=None, **extra_fields):
+        if not username:
+            raise ValueError('The Username field must be set')
+        user = self.model(username=username, **extra_fields)
         user.set_password(password)
-
         user.save(using=self._db)
-
         return user
 
-    def create_superuser(self, user_name: str, password=None, **extra_fields):
-        superuser = self.create_user(user_name, password, **extra_fields)
-        superuser.is_staff = True
-        superuser.is_superuser = True
+    def create_superuser(self, username, password, **extra_fields):
+        """Creates and saves a Superuser with the given username and password."""
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
 
-        superuser.save()
-        return superuser
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
+        return self.create_user(username, password, **extra_fields)
 
 
-class User(AbstractBaseUser):
-    user_name = models.CharField(max_length=30)
-    is_active = models.BooleanField(default=True)
-
-    # checks if the user is moderator
+class User(AbstractBaseUser, PermissionsMixin):
+    username = models.CharField(max_length=150, unique=True)
     is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    date_joined = models.DateTimeField(default=timezone.now)
 
-    # checks if the user is administrator
-    is_superuser = models.BooleanField(default=False)
+    objects = CustomUserManager()
 
-    objects = UserManager()
-
-    USERNAME_FIELD = 'user_name'
+    USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = []
+
+    class Meta:
+        db_table = 'user'
+        verbose_name = 'User'
+        verbose_name_plural = 'Users'
+
+    def __str__(self):
+        return self.username
 
 
 class RecoveryKey(models.Model):
+    """
+    Stores a unique, system-generated recovery key hash for secure account recovery.
+    The raw key is generated in the serializer and immediately hashed before saving here.
+    """
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        primary_key=True
+        on_delete=models.CASCADE
     )
 
     recovery_key_hash = models.CharField(max_length=128, unique=True)
@@ -56,10 +67,12 @@ class RecoveryKey(models.Model):
     def check_key(self, raw_key):
         return check_password(raw_key, self.recovery_key_hash)
 
+    def __str__(self):
+        return f"Recovery Key for {self.user.username}"
+
     class Meta:
         db_table = 'recovery_keys'
         verbose_name = 'Recovery Key'
-
 
 class Group(models.Model):
     group_name = models.CharField(max_length=100)
