@@ -6,7 +6,7 @@ from .models import Group, Character, Roll
 from .serializers import GroupSerializer, CharacterSerializer, RollSerializer
 
 
-class GroupViewSets(ModelViewSet):
+class GroupViewSet(ModelViewSet):
     serializer_class = GroupSerializer
     permission_classes = [IsAuthenticated]
 
