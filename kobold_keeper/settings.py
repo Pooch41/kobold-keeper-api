@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 secret_key = os.getenv('SETTINGS_DJANGO_KEY')
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt',
 
     'kobold_keeper.apps.KoboldKeeperConfig',
     'api'
@@ -136,3 +138,25 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'NON_FIELD_ERRORS_KEY': 'error',
+}
+
+SIMPLE_JWT = {
+    # Use your custom serializer that handles the username/password validation
+    'TOKEN_OBTAIN_SERIALIZER': 'api.serializers.CustomTokenObtainPairSerializer',
+
+    # Set the token lifecycles
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),  # Keep this short for security
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Allow re-login for a week
+
+    # Optional: Customize the token type header
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
