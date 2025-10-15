@@ -1,6 +1,7 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from django.views.generic import TemplateView
 
 from .models import Group, Character, Roll
 from .serializers import GroupSerializer, CharacterSerializer, RollSerializer
