@@ -86,11 +86,11 @@ WSGI_APPLICATION = 'kobold_keeper.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'kobold_vault',
-        'USER': 'kobold_keeper',
-        'TEST': {
-            'NAME': 'kobold_test'
-        }
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST'),
+        'PORT': os.environ.get('DB_PORT'),
     }
 }
 
@@ -150,13 +150,10 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    # Use your custom serializer that handles the username/password validation
     'TOKEN_OBTAIN_SERIALIZER': 'api.serializers.CustomTokenObtainPairSerializer',
 
-    # Set the token lifecycles
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),  # Keep this short for security
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Allow re-login for a week
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=20),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 
-    # Optional: Customize the token type header
     'AUTH_HEADER_TYPES': ('Bearer',),
 }

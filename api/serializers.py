@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, ValidationError, PermissionDenied
 from django.db import transaction
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.hashers import check_password
@@ -108,48 +108,67 @@ class CharacterSerializer(serializers.ModelSerializer):
 
 
 class RollSerializer(serializers.ModelSerializer):
-
-    roll_formula = serializers.CharField(
-        max_length=50,
+    target_character_id = serializers.PrimaryKeyRelatedField(
+        queryset=Character.objects.all(),
+        source='character',
         write_only=True,
-        help_text="e.g., '2d6+5' or '1d20-1'")
+        help_text="The ID of the Character for whom the roll is being made."
+    )
 
-    roll_input = serializers.CharField(read_only=True)
+    roll_input = serializers.CharField(
+        max_length=512,
+        write_only=True,
+        help_text="e.g., '2d6+5' or '1d20-1'"
+    )
+
+    group_id = serializers.PrimaryKeyRelatedField(
+        queryset=Group.objects.all(),
+        source='group',
+        write_only=True,
+        help_text="The ID of the Group associated with the roll."
+    )
+
     roll_value = serializers.IntegerField(read_only=True)
     raw_dice_rolls = serializers.JSONField(read_only=True)
+
+    user_id = serializers.ReadOnlyField(source='character.user.id')
 
     class Meta:
         model = Roll
         fields = [
-            'id', 'character', 'roll_formula',
-            # Output fields:
-            'roll_input', 'roll_value', 'raw_dice_rolls',
-            'user', 'group', 'timestamp'
+            'id',
+            'target_character_id',
+            'group_id',
+            'roll_input',
+
+            'roll_value',
+            'raw_dice_rolls',
+            'user_id',
         ]
-        read_only_fields = ['id', 'user', 'group', 'timestamp']
 
-    def validate_roll_formula(self, roll_formula):
+        read_only_fields = ['character', 'group']
+
+    def validate(self, data):
+        request = self.context.get('request')
+
+        character_instance = data.get('character')
+        input_formula = data.get('roll_input')
+
+
+        if hasattr(character_instance, 'user') and character_instance.user != request.user:
+            raise PermissionDenied("The selected character does not belong to the authenticated user.")
+
         try:
-            DiceRoller.calculate_roll(roll_formula)
-        except InvalidRollFormula as e:
-            raise serializers.ValidationError(str(e))
-        return roll_formula
+            roll_results = DiceRoller.calculate_roll(input_formula)
+        except Exception as e:
+            raise serializers.ValidationError({"roll_input": f"Invalid roll formula or calculation error: {e}"})
 
-    def create(self, validated_data):
-        roll_formula = validated_data.pop('roll_formula')
-        character_instance = validated_data.pop('character')
-        group_instance=character_instance.group
+        data['roll_input'] = input_formula
+        data['roll_value'] = roll_results['final_result']
+        data['raw_dice_rolls'] = roll_results['roll_details']
 
-        roll_results = DiceRoller.calculate_roll(roll_formula)
+        return data
 
-        validated_data['roll_input'] = roll_formula
-        validated_data['roll_value'] = roll_results['final_result']
-        validated_data['raw_dice_rolls'] = roll_results['outcomes']
-
-        validated_data['character'] = character_instance
-        validated_data['group'] = group_instance
-
-        return Roll.objects.create(**validated_data)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):

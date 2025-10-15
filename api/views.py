@@ -1,7 +1,6 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
-from django.views.generic import TemplateView
 
 from .models import Group, Character, Roll
 from .serializers import GroupSerializer, CharacterSerializer, RollSerializer
@@ -43,4 +42,4 @@ class RollViewSet(ModelViewSet):
         character_instance = serializer.validated_data.get('character')
         if character_instance.group.owner != self.request.user:
             raise PermissionDenied("You do not have permission to record a roll for this character.")
-        serializer.save(user=self.request.user)
+        serializer.save()
