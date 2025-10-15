@@ -14,7 +14,7 @@ class GroupViewSet(ModelViewSet):
         return Group.objects.filter(owner=self.request.user).order_by('group_name')
 
     def perform_create(self, serializer):
-        serializer.save(onwer=self.request.user)
+        serializer.save(owner=self.request.user)
 
 
 class CharacterViewSet(ModelViewSet):
