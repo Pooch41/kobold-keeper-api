@@ -4,11 +4,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
 from django.contrib.auth import get_user_model
 
-from .models import Group, Character, Roll, RecoveryKey
+from .models import Group, Character, Roll
 from .serializers import GroupSerializer, CharacterSerializer, RollSerializer, PasswordResetWithKeySerializer
 
 User = get_user_model()

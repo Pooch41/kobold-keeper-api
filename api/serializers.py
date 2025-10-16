@@ -8,7 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 
 from .models import User, Group, Character, Roll, RecoveryKey
 from .utils import generate_key
-from .dice_roller import DiceRoller, InvalidRollFormula
+from .dice_roller import DiceRoller
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True,

@@ -26,7 +26,6 @@ def exponential_backoff(func, max_retries=5, delay=1.0):
 
 
 def run_reset_test():
-    """Simulates a password reset request."""
     print("--- Django Password Reset Test Utility ---")
     print(f"Target URL: {API_URL}")
     print(f"Testing User: {TEST_USERNAME}")
@@ -36,7 +35,8 @@ def run_reset_test():
     print(f"Using New Password: {new_password}")
 
     if not all([TEST_USERNAME, TEST_RECOVERY_KEY, new_password]):
-        print("\nERROR: Please ensure all TEST data fields are properly configured at the top of the script.")
+        print("\nERROR: Please ensure all "
+              "TEST data fields are properly configured at the top of the script.")
         return
 
     payload = {
