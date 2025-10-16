@@ -8,7 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 
 from .models import User, Group, Character, Roll, RecoveryKey
 from .utils import generate_key
-from .dice_roller import DiceRoller, InvalidRollFormula
+from .dice_roller import DiceRoller
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True,
@@ -16,11 +16,11 @@ class UserSerializer(serializers.ModelSerializer):
                                      style={'input_type': 'password'}
                                      )
 
-    raw_recovery_key = serializers.CharField(max_length=10, read_only=True)
+    recovery_key = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['user_name', 'password', 'raw_recovery_key']
+        fields = ['user_name', 'password', 'recovery_key']
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -30,7 +30,7 @@ class UserSerializer(serializers.ModelSerializer):
             recovery_key_instance = RecoveryKey.objects.create(user=user)
             recovery_key_instance.set_key(raw_key)
             recovery_key_instance.save()
-            user.raw_recovery_key = raw_key
+            user.recovery_key = raw_key
 
             return user
 

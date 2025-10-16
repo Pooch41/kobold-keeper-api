@@ -4,6 +4,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 
+from .utils import generate_key
+
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, username, password=None, **extra_fields):
@@ -69,6 +71,15 @@ class RecoveryKey(models.Model):
         db_table = 'recovery_keys'
         verbose_name = 'Recovery Key'
 
+    @classmethod
+    def create_and_hash_key(cls, user_instance):
+        raw_key = generate_key()
+        recovery_key_instance = cls(user=user_instance)
+        recovery_key_instance.set_key(raw_key)
+        recovery_key_instance.save()
+
+        return raw_key
+
 
 class Group(models.Model):
     group_name = models.CharField(max_length=100)
@@ -83,11 +94,9 @@ class Character(models.Model):
     character_name = models.CharField(max_length=100)
     character_note = models.CharField(max_length=256, blank=True)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
-
-    # --- ADDED: The character owner/player, which the Admin was trying to filter by ---
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='characters')
 
-    # allows DM to mark NPCs
+
     is_npc = models.BooleanField(default=False)
 
     def __str__(self):
