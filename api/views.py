@@ -1,10 +1,17 @@
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
+from rest_framework import status
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.auth import get_user_model
 
-from .models import Group, Character, Roll
-from .serializers import GroupSerializer, CharacterSerializer, RollSerializer
+from .models import Group, Character, Roll, RecoveryKey
+from .serializers import GroupSerializer, CharacterSerializer, RollSerializer, PasswordResetWithKeySerializer
 
+User = get_user_model()
 
 class GroupViewSet(ModelViewSet):
     serializer_class = GroupSerializer
@@ -43,3 +50,15 @@ class RollViewSet(ModelViewSet):
         if character_instance.group.owner != self.request.user:
             raise PermissionDenied("You do not have permission to record a roll for this character.")
         serializer.save()
+
+
+class PasswordResetWithKeyView(APIView):
+    permission_classes = [AllowAny]
+    def post(self, request):
+        serializer = PasswordResetWithKeySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {"detail": "Password has been successfully reset."},
+            status=status.HTTP_200_OK
+        )
