@@ -13,7 +13,10 @@ NEW_PASSWORD = "MySecureNewPassword123"
 
 
 def exponential_backoff(func, max_retries=5, delay=1.0):
-    """Handles transient network errors with exponential backoff."""
+    """
+    Attempts to call a function (network request) multiple times with increasing
+    delay to handle temporary connection issues.
+    """
     for i in range(max_retries):
         try:
             return func()
@@ -26,6 +29,7 @@ def exponential_backoff(func, max_retries=5, delay=1.0):
 
 
 def run_reset_test():
+    """Main function to execute the password reset test request."""
     print("--- Django Password Reset Test Utility ---")
     print(f"Target URL: {API_URL}")
     print(f"Testing User: {TEST_USERNAME}")

@@ -1,6 +1,7 @@
-import requests
 import json
 import time
+
+import requests
 
 BASE_URL = "http://localhost:8000"
 API_PREFIX = "/api/"
@@ -12,6 +13,15 @@ NEW_PASSWORD = "MySecureNewPassword123"
 
 
 def exponential_backoff(func, max_retries=5, delay=1.0):
+    """
+    Attempts to call a function (network request) multiple times with increasing
+    delay to handle temporary connection issues.
+
+    Args:
+        func (callable): The function to execute (e.g., requests.post).
+        max_retries (int): Maximum number of attempts.
+        delay (float): Initial delay in seconds.
+    """
     for i in range(max_retries):
         try:
             return func()
@@ -24,6 +34,7 @@ def exponential_backoff(func, max_retries=5, delay=1.0):
 
 
 def run_login_test():
+    """Main function to execute the token acquisition test."""
     print("--- Django JWT Token Acquisition Test Utility ---")
     print(f"Target URL: {API_URL}")
     print(f"Attempting to log in as: {TEST_USERNAME}")
