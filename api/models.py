@@ -1,14 +1,20 @@
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
-from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.db import models
 from django.utils import timezone
 
 from .utils import generate_key
 
 
 class CustomUserManager(BaseUserManager):
+    """
+    Custom manager for the User model, required when using a custom user model.
+    It defines how to create regular users and superusers.
+    """
+
     def create_user(self, username, password=None, **extra_fields):
+        """Creates and saves a regular User with the given username and password."""
         if not username:
             raise ValueError('The Username field must be set')
         user = self.model(username=username, **extra_fields)
@@ -31,6 +37,11 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    """
+    Custom user model that uses username as the unique identifier instead of email.
+    It extends AbstractBaseUser for authentication and PermissionsMixin for Django's
+    permission framework.
+    """
     username = models.CharField(max_length=150, unique=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -51,6 +62,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class RecoveryKey(models.Model):
+    """
+    Stores a hashed, temporary recovery key for a user. This is a one-time
+    use key for password reset, hashed to ensure the plain key is never stored.
+    """
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE
@@ -59,9 +74,11 @@ class RecoveryKey(models.Model):
     recovery_key_hash = models.CharField(max_length=128, unique=True)
 
     def set_key(self, raw_key):
+        """Hashes the raw key using Django's standard password hashing."""
         self.recovery_key_hash = make_password(raw_key)
 
     def check_key(self, raw_key):
+        """Checks a raw key string against the stored hash."""
         return check_password(raw_key, self.recovery_key_hash)
 
     def __str__(self):
@@ -73,6 +90,10 @@ class RecoveryKey(models.Model):
 
     @classmethod
     def create_and_hash_key(cls, user_instance):
+        """
+        Class method to generate a new raw key, hash it, save the instance,
+        and return the raw key for the user to use.
+        """
         raw_key = generate_key()
         recovery_key_instance = cls(user=user_instance)
         recovery_key_instance.set_key(raw_key)
@@ -82,6 +103,10 @@ class RecoveryKey(models.Model):
 
 
 class Group(models.Model):
+    """
+    Represents a group or campaign context that multiple users or characters
+    might roll in. This allows for filtering rolls for a shared campaign environment.
+    """
     group_name = models.CharField(max_length=100)
     # 1-1 group-owner, characters attached to group
     owner = models.ForeignKey('User', on_delete=models.CASCADE)
@@ -91,12 +116,15 @@ class Group(models.Model):
 
 
 class Character(models.Model):
+    """
+    Represents a simple character profile, acting as a tag for rolls.
+    This allows a user (e.g., a GM) to track rolls for different entities
+    without requiring a full character sheet system.
+    """
     character_name = models.CharField(max_length=100)
     character_note = models.CharField(max_length=256, blank=True)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='characters')
-
-
     is_npc = models.BooleanField(default=False)
 
     def __str__(self):
@@ -104,15 +132,15 @@ class Character(models.Model):
 
 
 class Roll(models.Model):
+    """
+    The core model for the application, storing the history of every dice roll
+    executed by a user. This data powers the Luck Analytics Service.
+    """
     character = models.ForeignKey('Character', on_delete=models.CASCADE)
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
-
     roll_input = models.CharField(max_length=512)
-
     roll_value = models.IntegerField()
-
     raw_dice_rolls = models.JSONField(default=dict)
-
     rolled_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):

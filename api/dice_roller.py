@@ -1,20 +1,32 @@
-import re
 import random
-from typing import Dict, Any, List
+import re
+from typing import Dict, Any
 
 
 class InvalidRollFormula(Exception):
+    """Custom exception raised when the provided dice formula is syntactically invalid."""
     pass
 
 
 class DiceRoller:
+    """
+    Core class responsible for parsing dice formulas, executing the rolls,
+    and calculating the final result.
+    """
     TOKEN_RE = re.compile(
         r"([+-])?([1-9][0-9]*[dD][1-9][0-9]*(?:(?:dl|dh|kl|kh)[1-9][0-9]*)?|[1-9][0-9]*)")
 
     @staticmethod
     def _parse_and_roll_dice(dice_part: str) -> Dict[str, Any]:
-        lower_dice_part = dice_part.lower()
+        """
+        Parses a single dice component string (e.g., '3d6', '4d20kh1'), executes the
+        physical roll, and applies drop/keep logic.
 
+        :param dice_part: A single dice component string.
+        :raises InvalidRollFormula: If the dice component format is invalid.
+        :return: A dictionary containing details of the executed roll (rolls, total, etc.).
+        """
+        lower_dice_part = dice_part.lower()
         match_dice = re.match(r"("
                               r"[1-9][0-9]*)[dD]([1-9][0-9]*)(?:(dl|dh|kl|kh)([1-9][0-9]*))?$",
                               lower_dice_part)
@@ -75,6 +87,15 @@ class DiceRoller:
 
     @classmethod
     def calculate_roll(cls, formula: str) -> Dict[str, Any]:
+        """
+        The main public method. Parses the full formula string, breaks it into
+        components, executes all rolls, and sums the results.
+
+        :param formula: The dice roll formula string (e.g., '1d20+5').
+        :raises InvalidRollFormula: If the overall formula syntax is invalid.
+        :return: A dictionary with the 'final_result', the original 'roll_formula',
+                 and a list of 'roll_details' for persistence.
+        """
         formula = formula.replace(' ', '')
         if not formula:
             raise InvalidRollFormula("Formula cannot be empty.")
@@ -120,7 +141,6 @@ class DiceRoller:
 
             else:
                 raise InvalidRollFormula(f"Unrecognized term: {term}")
-
 
             if sign == '-':
                 total -= component_total

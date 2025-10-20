@@ -1,16 +1,21 @@
-from rest_framework import serializers
 from django.contrib.auth import authenticate
-from rest_framework.exceptions import AuthenticationFailed, ValidationError, PermissionDenied
-from django.db import transaction
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
+from django.db import transaction
+from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed, ValidationError, PermissionDenied
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from .dice_roller import DiceRoller
 from .models import User, Group, Character, Roll, RecoveryKey
 from .utils import generate_key
-from .dice_roller import DiceRoller
+
 
 class UserSerializer(serializers.ModelSerializer):
+    """
+    Serializer for User registration. Handles creating a User and an associated
+    RecoveryKey in a single, atomic transaction.
+    """
     password = serializers.CharField(write_only=True,
                                      required=True,
                                      style={'input_type': 'password'}
@@ -23,6 +28,9 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['user_name', 'password', 'recovery_key']
 
     def create(self, validated_data):
+        """
+        Overrides the create method to handle user creation and recovery key generation atomically.
+        """
         with transaction.atomic():
             password = validated_data.pop('password')
             raw_key = generate_key()
@@ -34,7 +42,12 @@ class UserSerializer(serializers.ModelSerializer):
 
             return user
 
+
 class GroupSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Group model (Campaigns).
+    The analytics fields are read-only, populated by a background Celery task.
+    """
     owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     characters = serializers.SlugRelatedField(
@@ -57,17 +70,21 @@ class GroupSerializer(serializers.ModelSerializer):
                   '_group_mod_max',
                   ]
         read_only_fields = ['id',
-                  'owner',
-                  '_group_raw_avg',
-                  '_group_crit_fail_count',
-                  '_group_crit_success_count',
-                  '_group_mod_avg',
-                  '_group_mod_min',
-                  '_group_mod_max',
-                  ]
+                            'owner',
+                            '_group_raw_avg',
+                            '_group_crit_fail_count',
+                            '_group_crit_success_count',
+                            '_group_mod_avg',
+                            '_group_mod_min',
+                            '_group_mod_max',
+                            ]
 
 
 class CharacterSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Character model.
+    Includes custom logic to restrict group choices to the user's owned groups.
+    """
     group = serializers.PrimaryKeyRelatedField(queryset=Group.objects.all())
 
     class Meta:
@@ -108,6 +125,11 @@ class CharacterSerializer(serializers.ModelSerializer):
 
 
 class RollSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating a new Roll record.
+    It takes a dice formula, validates it, calculates the result using DiceRoller,
+    and stores the final values.
+    """
     target_character_id = serializers.PrimaryKeyRelatedField(
         queryset=Character.objects.all(),
         source='character',
@@ -154,7 +176,6 @@ class RollSerializer(serializers.ModelSerializer):
         character_instance = data.get('character')
         input_formula = data.get('roll_input')
 
-
         if hasattr(character_instance, 'user') and character_instance.user != request.user:
             raise PermissionDenied("The selected character does not belong to the authenticated user.")
 
@@ -171,6 +192,12 @@ class RollSerializer(serializers.ModelSerializer):
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom serializer for JWT token acquisition.
+    This overrides the default logic to ensure Django's standard `authenticate`
+    is used against our custom User model.
+    """
+
     def validate(self, attrs):
         username = attrs.get(User.USERNAME_FIELD)
         password = attrs.get('password')
@@ -189,7 +216,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         self.user = user
         return super().validate(attrs)
 
+
 class PasswordResetWithKeySerializer(serializers.Serializer):
+    """
+    Handles password reset using a one-time recovery key (used when the user is not logged in).
+    """
     username = serializers.CharField(required=True)
     recovery_key = serializers.CharField(required=True, write_only=True)
     new_password = serializers.CharField(required=True, write_only=True, min_length=8)
@@ -219,6 +250,7 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
         self.user.save()
 
         return self.user
+
 
 class UserPasswordChangeSerializer(serializers.Serializer):
     """

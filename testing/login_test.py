@@ -1,14 +1,14 @@
-import requests
 import json
 import time
 
+import requests
 
 BASE_URL = "http://localhost:8000"
 API_PREFIX = "/api/"
-ENDPOINT_PATH = "auth/password/reset/"
+ENDPOINT_PATH = "auth/token/"
 API_URL = f"{BASE_URL}{API_PREFIX}{ENDPOINT_PATH}"
+
 TEST_USERNAME = "shell_test_user"
-TEST_RECOVERY_KEY = "GvCTcynD2Z"
 NEW_PASSWORD = "MySecureNewPassword123"
 
 
@@ -16,6 +16,11 @@ def exponential_backoff(func, max_retries=5, delay=1.0):
     """
     Attempts to call a function (network request) multiple times with increasing
     delay to handle temporary connection issues.
+
+    Args:
+        func (callable): The function to execute (e.g., requests.post).
+        max_retries (int): Maximum number of attempts.
+        delay (float): Initial delay in seconds.
     """
     for i in range(max_retries):
         try:
@@ -28,31 +33,25 @@ def exponential_backoff(func, max_retries=5, delay=1.0):
             time.sleep(wait_time)
 
 
-def run_reset_test():
-    """Main function to execute the password reset test request."""
-    print("--- Django Password Reset Test Utility ---")
+def run_login_test():
+    """Main function to execute the token acquisition test."""
+    print("--- Django JWT Token Acquisition Test Utility ---")
     print(f"Target URL: {API_URL}")
-    print(f"Testing User: {TEST_USERNAME}")
+    print(f"Attempting to log in as: {TEST_USERNAME}")
 
-    new_password = NEW_PASSWORD
-    print(f"Using Recovery Key: {TEST_RECOVERY_KEY}")
-    print(f"Using New Password: {new_password}")
-
-    if not all([TEST_USERNAME, TEST_RECOVERY_KEY, new_password]):
-        print("\nERROR: Please ensure all "
-              "TEST data fields are properly configured at the top of the script.")
+    if not all([TEST_USERNAME, NEW_PASSWORD]):
+        print("\nERROR: Please ensure TEST_USERNAME and NEW_PASSWORD are set.")
         return
 
     payload = {
         "username": TEST_USERNAME,
-        "recovery_key": TEST_RECOVERY_KEY,
-        "new_password": new_password
+        "password": NEW_PASSWORD
     }
 
     headers = {
         'Content-Type': 'application/json'
     }
-    print("\nSending POST request...")
+    print("\nSending POST request to acquire tokens...")
 
     def make_request():
         return requests.post(API_URL, headers=headers, data=json.dumps(payload), timeout=10)
@@ -75,12 +74,26 @@ def run_reset_test():
         return
 
     if response.status_code == 200:
-        print("\n✅ SUCCESS: Password Reset Complete.")
-        print(f"Detail: {response_data.get('detail', 'No detail provided.')}")
-        print(f"User {TEST_USERNAME}'s password has been updated!")
+        access_token = response_data.get('access')
+        refresh_token = response_data.get('refresh')
 
-    elif response.status_code == 400:
-        print("\n❌ FAILED: Validation Error (Status 400).")
+        if access_token and refresh_token:
+            print("\n✅ SUCCESS: JWT Tokens Acquired.")
+            print("-" * 30)
+            print("ACCESS TOKEN (Bearer Token for API calls):")
+            print(access_token[:30] + '...[truncated for display]')
+            print("-" * 30)
+            print("REFRESH TOKEN (For renewing session):")
+            print(refresh_token[:30] + '...[truncated for display]')
+            print("-" * 30)
+            print("The full authentication system is now confirmed!")
+        else:
+            print("\n❌ FAILED: Status 200, but tokens are missing.")
+            print(json.dumps(response_data, indent=4))
+
+    elif response.status_code == 401:
+        print("\n❌ FAILED: Unauthorized (Status 401).")
+        print("This usually means the username or password was incorrect.")
         print("-" * 30)
         print(json.dumps(response_data, indent=4))
         print("-" * 30)
@@ -92,4 +105,4 @@ def run_reset_test():
 
 
 if __name__ == "__main__":
-    run_reset_test()
+    run_login_test()
