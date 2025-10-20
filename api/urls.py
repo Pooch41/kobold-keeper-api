@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .authentication import RegisterView, PasswordChangeView, PasswordResetWithKeyView
-from .views import GroupViewSet, CharacterViewSet, RollViewSet
+from .views import GroupViewSet, CharacterViewSet, RollViewSet, LuckAnalyticsView
+
 
 router = DefaultRouter()
 
@@ -21,4 +22,5 @@ auth_urlpatterns = [
 urlpatterns = [
     *router.urls,
     path('auth/', include(auth_urlpatterns)),
+    path('analytics/luck/', LuckAnalyticsView.as_view(), name='luck-analytics')
 ]
