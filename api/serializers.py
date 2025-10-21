@@ -25,7 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['user_name', 'password', 'recovery_key']
+        fields = ['username', 'password', 'recovery_key']
 
     def create(self, validated_data):
         """
@@ -61,22 +61,10 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = ['id',
                   'group_name',
                   'owner',
-                  'characters',
-                  '_group_raw_avg',
-                  '_group_crit_fail_count',
-                  '_group_crit_success_count',
-                  '_group_mod_avg',
-                  '_group_mod_min',
-                  '_group_mod_max',
+                  'characters'
                   ]
         read_only_fields = ['id',
                             'owner',
-                            '_group_raw_avg',
-                            '_group_crit_fail_count',
-                            '_group_crit_success_count',
-                            '_group_mod_avg',
-                            '_group_mod_min',
-                            '_group_mod_max',
                             ]
 
 
@@ -91,26 +79,15 @@ class CharacterSerializer(serializers.ModelSerializer):
         model = Character
         fields = [
             'id',
-            'user',
             'character_name',
             'character_note',
-            '_raw_avg',
-            '_crit_fail_count',
-            '_crit_success_count',
-            '_mod_avg',
-            '_mod_min',
-            '_mod_max',
+            'user',
             'is_npc',
             'group'
         ]
         read_only_fields = ['id',
                             'user',
-                            '_raw_avg',
-                            '_crit_fail_count',
-                            '_crit_success_count',
-                            '_mod_avg',
-                            '_mod_min',
-                            '_mod_max']
+                            ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
