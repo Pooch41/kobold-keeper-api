@@ -1,4 +1,3 @@
-import json
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
@@ -75,7 +74,7 @@ class RollViewSet(ModelViewSet):
         Ensures users can only view rolls associated with groups they own.
         Roll -> Character -> Group -> Owner
         """
-        return Roll.objects.filter(character__group__owner=self.request.user).order_by('-roll_id')
+        return Roll.objects.filter(character__group__owner=self.request.user).order_by('-id')
 
     def perform_create(self, serializer):
         """
