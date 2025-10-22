@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
+
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -112,7 +114,10 @@ class LuckAnalyticsView(APIView):
     API endpoint for retrieving luck and rolling statistics.
 
     The view determines the scope (global, character, or group) based on
-    optional query parameters and returns a consolidated report.
+    optional query parameters and returns a consolidated report including:
+    - Overall modified roll metrics (min/max/average of final results).
+    - Raw dice averages (average of every single die rolled).
+    - Breakdown by dice type (d4, d6, d20, etc., average vs. theoretical).
 
     Usage:
     - GET /api/analytics/luck/ (Global scope for all user-owned rolls)
@@ -131,6 +136,7 @@ class LuckAnalyticsView(APIView):
         group_id = request.query_params.get('group_id')
 
         if character_id:
+
             if not Character.objects.filter(id=character_id, user=user).exists():
                 return Response(
                     {"detail": "Character not found or not owned by the user."},
@@ -149,8 +155,9 @@ class LuckAnalyticsView(APIView):
             scope = f"Group: {group_id}"
 
         else:
-            roll_queryset = Roll.objects.filter(character__user=user)
+            roll_queryset: QuerySet[Roll] = Roll.objects.filter(character__user=user)
             scope = "Global"
+
 
         if not roll_queryset.exists():
             return Response({
@@ -160,26 +167,32 @@ class LuckAnalyticsView(APIView):
                 "metrics": {}
             }, status=status.HTTP_200_OK)
 
-
         analytics_service = LuckAnalyticsService(roll_queryset)
 
         try:
             modified_metrics = analytics_service.get_modified_roll_metrics()
             raw_metrics = analytics_service.calculate_raw_dice_averages()
+            dice_type_breakdown = analytics_service.calculate_dice_type_averages()
+
         except Exception as e:
             return Response(
                 {"detail": f"An error occurred during calculation: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+        total_rolls_count = modified_metrics.pop("total_rolls")
+
         response_data = {
             "scope": scope,
-            "total_rolls": modified_metrics.pop("total_rolls"),
+            "total_rolls": total_rolls_count,
             "metrics": {
                 "modified": modified_metrics,
+
                 "raw_dice": raw_metrics,
+
+                "dice_type_breakdown": dice_type_breakdown,
             }
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
-
