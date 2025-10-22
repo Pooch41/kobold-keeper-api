@@ -1,6 +1,10 @@
-import os
-from celery import Celery
+"""
+Celery worker application configuration for the Kobold Keeper project.
+"""
 
+import os
+
+from celery import Celery
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'kobold_keeper.settings')
 app = Celery('kobold_keeper')

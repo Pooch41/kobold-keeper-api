@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 
+
 class KoboldKeeperConfig(AppConfig):
     name = 'kobold_keeper'
     verbose_name = "Kobold Keeper Core"

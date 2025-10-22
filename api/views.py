@@ -1,17 +1,16 @@
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
-
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
+from .dice_reader import LuckAnalyticsService, RollQueryFilter
 from .models import Group, Character, Roll
 from .serializers import (GroupSerializer, CharacterSerializer,
-                          RollSerializer, PasswordResetWithKeySerializer)
-from .dice_reader import LuckAnalyticsService, RollQueryFilter
+                          RollSerializer)
 
 User = get_user_model()
 
@@ -89,26 +88,6 @@ class RollViewSet(ModelViewSet):
         serializer.save()
 
 
-class PasswordResetWithKeyView(APIView):
-    """
-    Custom APIView to handle password reset using a one-time recovery key.
-    Endpoint: /auth/password/reset/
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        """
-        Processes the POST request containing username, recovery_key, and new_password.
-        """
-        serializer = PasswordResetWithKeySerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(
-            {"detail": "Password has been successfully reset."},
-            status=status.HTTP_200_OK
-        )
-
-
 class LuckAnalyticsView(APIView):
     """
     API endpoint for retrieving luck and rolling statistics.
@@ -158,7 +137,6 @@ class LuckAnalyticsView(APIView):
             roll_queryset: QuerySet[Roll] = Roll.objects.filter(character__user=user)
             scope = "Global"
 
-
         if not roll_queryset.exists():
             return Response({
                 "scope": scope,
@@ -179,7 +157,6 @@ class LuckAnalyticsView(APIView):
                 {"detail": f"An error occurred during calculation: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
         total_rolls_count = modified_metrics.pop("total_rolls")
 

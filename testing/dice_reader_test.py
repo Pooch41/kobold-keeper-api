@@ -1,10 +1,11 @@
-import pytest
 import json
-from django.utils import timezone
 from datetime import timedelta
 
-from api.models import Roll, Character, Group, User
+import pytest
+from django.utils import timezone
+
 from api.dice_reader import LuckAnalyticsService, RollQueryFilter
+from api.models import Roll, Character, Group, User
 
 
 @pytest.fixture
