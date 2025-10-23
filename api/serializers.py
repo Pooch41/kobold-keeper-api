@@ -10,7 +10,7 @@ from rest_framework.exceptions import (
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .dice_roller import DiceRoller
+from .dice_roller import DiceRoller, InvalidRollFormula
 from .models import User, Group, Character, Roll, RecoveryKey
 from .utils import generate_key
 
@@ -124,7 +124,7 @@ class CharacterSerializer(serializers.ModelSerializer):
 class RollSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new Roll record.
-    It takes a dice formula, validates it, calculates the result using DiceRoller,
+    It takes a die formula, validates it, calculates the result using DiceRoller,
     and stores the final values.
     """
     target_character_id = serializers.PrimaryKeyRelatedField(
@@ -165,11 +165,15 @@ class RollSerializer(serializers.ModelSerializer):
             'user_id',
         ]
 
-    def validate(self, data):
+    def validate(self, attrs):
+        """
+        Validates the incoming data. Checks character ownership and validates the dice formula.
+        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        """
         request = self.context.get('request')
 
-        character_instance = data.get('character')
-        input_formula = data.get('roll_input')
+        character_instance = attrs.get('character')
+        input_formula = attrs.get('roll_input')
 
         if hasattr(character_instance, 'user') and \
            character_instance.user != request.user:
@@ -179,15 +183,18 @@ class RollSerializer(serializers.ModelSerializer):
 
         try:
             roll_results = DiceRoller.calculate_roll(input_formula)
-        except Exception as e:
+        except InvalidRollFormula as e:
             err_msg = f"Invalid roll formula or calculation error: {e}"
             raise serializers.ValidationError({"roll_input": err_msg})
+        except Exception as e:
+            err_msg = f"An unexpected calculation error occurred: {e}"
+            raise serializers.ValidationError({"roll_input": err_msg})
 
-        data['roll_input'] = input_formula
-        data['roll_value'] = roll_results['final_result']
-        data['raw_dice_rolls'] = roll_results['roll_details']
+        attrs['roll_input'] = input_formula
+        attrs['roll_value'] = roll_results['final_result']
+        attrs['raw_dice_rolls'] = roll_results['roll_details']
 
-        return data
+        return attrs
 
     def create(self, validated_data):
         return Roll.objects.create(**validated_data)
@@ -247,9 +254,13 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
         """Not used; logic is handled in .save()."""
         raise NotImplementedError("This serializer is for password reset (update logic only).")
 
-    def validate(self, data):
-        username = data.get('username')
-        recovery_key = data.get('recovery_key')
+    def validate(self, attrs):
+        """
+        Validates the username and recovery key combination.
+        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        """
+        username = attrs.get('username')
+        recovery_key = attrs.get('recovery_key')
 
         try:
             user = User.objects.get(**{User.USERNAME_FIELD: username})
@@ -269,7 +280,7 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
             raise ValidationError("Authentication failed. Invalid username or recovery key.")
 
         self.user = user
-        return data
+        return attrs
 
     def save(self, **kwargs):
         """
@@ -306,9 +317,13 @@ class UserPasswordChangeSerializer(serializers.Serializer):
             raise serializers.ValidationError("Incorrect current password.")
         return value
 
-    def validate(self, data):
-        new_password = data.get('new_password')
-        new_password_confirm = data.get('new_password_confirm')
+    def validate(self, attrs):
+        """
+        Validates the new password matching and complexity.
+        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        """
+        new_password = attrs.get('new_password')
+        new_password_confirm = attrs.get('new_password_confirm')
         user = self.context['request'].user
 
         if new_password != new_password_confirm:
@@ -321,7 +336,7 @@ class UserPasswordChangeSerializer(serializers.Serializer):
         except ValidationError as e:
             raise serializers.ValidationError({"new_password": list(e)})
 
-        return data
+        return attrs
 
     def save(self, **kwargs):
         user = self.context['request'].user

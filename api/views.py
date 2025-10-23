@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, NotFound, APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,8 +9,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from .dice_reader import LuckAnalyticsService, RollQueryFilter
 from .models import Group, Character, Roll
-from .serializers import (GroupSerializer, CharacterSerializer,
-                          RollSerializer)
+from .serializers import GroupSerializer, CharacterSerializer, RollSerializer
 
 User = get_user_model()
 
@@ -91,20 +90,61 @@ class RollViewSet(ModelViewSet):
 class LuckAnalyticsView(APIView):
     """
     API endpoint for retrieving luck and rolling statistics.
-
-    The view determines the scope (global, character, or group) based on
-    optional query parameters and returns a consolidated report including:
-    - Overall modified roll metrics (min/max/average of final results).
-    - Raw dice averages (average of every single die rolled).
-    - Breakdown by dice type (d4, d6, d20, etc., average vs. theoretical).
-
-    Usage:
-    - GET /api/analytics/luck/ (Global scope for all user-owned rolls)
-    - GET /api/analytics/luck/?character_id=111(Scope by a specific Character)
-    - GET /api/analytics/luck/?group_id=111 (Scope by a specific Group/Campaign)
+    ...
     """
 
     permission_classes = [IsAuthenticated]
+
+    def _get_scoped_queryset_and_name(self, user, character_id, group_id) -> tuple[QuerySet[Roll], str]:
+        """
+        Helper method to determine the scope of the roll query.
+        """
+        if character_id:
+            if not Character.objects.filter(id=character_id, user=user).exists():
+                raise NotFound(detail="Character not found or not owned by the user.")
+            queryset = RollQueryFilter.for_character(character_id)
+            scope_name = f"Character: {character_id}"
+            return queryset, scope_name
+
+        if group_id:
+            if not Group.objects.filter(id=group_id, owner=user).exists():
+                raise NotFound(detail="Group not found or not owned by the user.")
+            queryset = RollQueryFilter.for_group(group_id)
+            scope_name = f"Group: {group_id}"
+            return queryset, scope_name
+
+        queryset = Roll.objects.filter(character__user=user)
+        return queryset, "Global"
+
+    def _get_metrics_response_data(self, roll_queryset: QuerySet[Roll], scope: str) -> dict:
+        """
+        Calculates all required analytics using the service, handles errors,
+        and formats the final response dictionary. (Resolves R0914)
+        """
+        analytics_service = LuckAnalyticsService(roll_queryset)
+
+        try:
+            modified_metrics = analytics_service.get_modified_roll_metrics()
+            raw_metrics = analytics_service.calculate_raw_dice_averages()
+            dice_type_breakdown = analytics_service.calculate_dice_type_averages()
+
+        except Exception as e:
+            raise APIException(
+                detail=f"An error occurred during calculation: {str(e)}",
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            ) from e
+
+        total_rolls_count = modified_metrics.pop("total_rolls")
+
+        return {
+            "scope": scope,
+            "total_rolls": total_rolls_count,
+            "metrics": {
+                "modified": modified_metrics,
+                "raw_dice": raw_metrics,
+                "dice_type_breakdown": dice_type_breakdown,
+            }
+        }
 
     def get(self, request, *args, **kwargs):
         """
@@ -114,28 +154,14 @@ class LuckAnalyticsView(APIView):
         character_id = request.query_params.get('character_id')
         group_id = request.query_params.get('group_id')
 
-        if character_id:
-
-            if not Character.objects.filter(id=character_id, user=user).exists():
-                return Response(
-                    {"detail": "Character not found or not owned by the user."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            roll_queryset = RollQueryFilter.for_character(character_id)
-            scope = f"Character: {character_id}"
-
-        elif group_id:
-            if not Group.objects.filter(id=group_id, owner=user).exists():
-                return Response(
-                    {"detail": "Group not found or not owned by the user."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            roll_queryset = RollQueryFilter.for_group(group_id)
-            scope = f"Group: {group_id}"
-
-        else:
-            roll_queryset: QuerySet[Roll] = Roll.objects.filter(character__user=user)
-            scope = "Global"
+        try:
+            roll_queryset, scope = self._get_scoped_queryset_and_name(
+                user, character_id, group_id
+            )
+        except NotFound as e:
+            raise e
+        except Exception as e:
+            raise APIException(f"Error determining query scope: {e}") from e
 
         if not roll_queryset.exists():
             return Response({
@@ -145,31 +171,6 @@ class LuckAnalyticsView(APIView):
                 "metrics": {}
             }, status=status.HTTP_200_OK)
 
-        analytics_service = LuckAnalyticsService(roll_queryset)
-
-        try:
-            modified_metrics = analytics_service.get_modified_roll_metrics()
-            raw_metrics = analytics_service.calculate_raw_dice_averages()
-            dice_type_breakdown = analytics_service.calculate_dice_type_averages()
-
-        except Exception as e:
-            return Response(
-                {"detail": f"An error occurred during calculation: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-        total_rolls_count = modified_metrics.pop("total_rolls")
-
-        response_data = {
-            "scope": scope,
-            "total_rolls": total_rolls_count,
-            "metrics": {
-                "modified": modified_metrics,
-
-                "raw_dice": raw_metrics,
-
-                "dice_type_breakdown": dice_type_breakdown,
-            }
-        }
+        response_data = self._get_metrics_response_data(roll_queryset, scope)
 
         return Response(response_data, status=status.HTTP_200_OK)
