@@ -1,3 +1,7 @@
+"""
+Configuration for the 'api' Django application.
+"""
+
 from django.apps import AppConfig
 
 

@@ -182,12 +182,10 @@ class LuckAnalyticsService:
                 type_tracker[d_type]['sum'] += sum(individual_rolls)
                 type_tracker[d_type]['count'] += len(individual_rolls)
 
-
         results = {}
         for d_type, data in type_tracker.items():
             die_label = f"d{d_type}"
             avg = data['sum'] / data['count'] if data['count'] > 0 else 0.0
-
 
             theoretical_avg = (d_type + 1) / 2
 

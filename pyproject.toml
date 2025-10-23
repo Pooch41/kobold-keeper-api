@@ -1,0 +1,49 @@
+[tool.pylint]
+
+
+[tool.pylint.main]
+
+load-plugins = [
+    "pylint_django",
+    "pylint.extensions.no_self_use",
+]
+
+
+generated-members = ["objects"]
+
+
+ignore-paths = [
+    "migrations",
+    "static",
+    "venv",
+    "node_modules",
+    ".git",
+]
+
+django-settings-module = "kobold_keeper.settings"
+
+
+[tool.pylint.format]
+max-line-length = 100
+
+
+[tool.pylint.reports]
+fail-under = 9.0
+reports = "yes"
+
+
+[tool.pylint.messages-control]
+disable = [
+    "invalid-name",
+    "redefined-builtin",
+    "no-self-use",
+    "unused-argument",
+    "too-few-public-methods",
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "ungrouped-imports",
+    "attribute-defined-outside-init",
+    "C0301",
+    "R0901",
+]

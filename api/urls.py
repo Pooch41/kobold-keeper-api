@@ -5,7 +5,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .authentication import RegisterView, PasswordChangeView, PasswordResetWithKeyView
 from .views import GroupViewSet, CharacterViewSet, RollViewSet, LuckAnalyticsView
 
-
 router = DefaultRouter()
 
 router.register(r'groups', GroupViewSet, basename='group')

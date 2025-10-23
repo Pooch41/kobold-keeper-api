@@ -3,10 +3,14 @@ from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
-from rest_framework.exceptions import AuthenticationFailed, ValidationError, PermissionDenied
+from rest_framework.exceptions import (
+    AuthenticationFailed,
+    ValidationError,
+    PermissionDenied
+)
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .dice_roller import DiceRoller
+from .dice_roller import DiceRoller, InvalidRollFormula
 from .models import User, Group, Character, Roll, RecoveryKey
 from .utils import generate_key
 
@@ -42,6 +46,14 @@ class UserSerializer(serializers.ModelSerializer):
 
             return user
 
+    def update(self, instance, validated_data):
+        """
+        ModelSerializers intended for writing need both update and create.
+        This serializer is typically only used for registration (creation),
+        but we add this for completeness.
+        """
+        raise NotImplementedError("This serializer is for user registration (create) only.")
+
 
 class GroupSerializer(serializers.ModelSerializer):
     """
@@ -66,6 +78,14 @@ class GroupSerializer(serializers.ModelSerializer):
         read_only_fields = ['id',
                             'owner',
                             ]
+
+    def create(self, validated_data):
+        return Group.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        instance.group_name = validated_data.get('group_name', instance.group_name)
+        instance.save()
+        return instance
 
 
 class CharacterSerializer(serializers.ModelSerializer):
@@ -104,7 +124,7 @@ class CharacterSerializer(serializers.ModelSerializer):
 class RollSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new Roll record.
-    It takes a dice formula, validates it, calculates the result using DiceRoller,
+    It takes a die formula, validates it, calculates the result using DiceRoller,
     and stores the final values.
     """
     target_character_id = serializers.PrimaryKeyRelatedField(
@@ -145,27 +165,43 @@ class RollSerializer(serializers.ModelSerializer):
             'user_id',
         ]
 
-        read_only_fields = ['character', 'group']
-
-    def validate(self, data):
+    def validate(self, attrs):
+        """
+        Validates the incoming data. Checks character ownership and validates the dice formula.
+        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        """
         request = self.context.get('request')
 
-        character_instance = data.get('character')
-        input_formula = data.get('roll_input')
+        character_instance = attrs.get('character')
+        input_formula = attrs.get('roll_input')
 
-        if hasattr(character_instance, 'user') and character_instance.user != request.user:
-            raise PermissionDenied("The selected character does not belong to the authenticated user.")
+        if hasattr(character_instance, 'user') and \
+           character_instance.user != request.user:
+            raise PermissionDenied(
+                "The selected character does not belong to the authenticated user."
+            )
 
         try:
             roll_results = DiceRoller.calculate_roll(input_formula)
+        except InvalidRollFormula as e:
+            err_msg = f"Invalid roll formula or calculation error: {e}"
+            raise serializers.ValidationError({"roll_input": err_msg})
         except Exception as e:
-            raise serializers.ValidationError({"roll_input": f"Invalid roll formula or calculation error: {e}"})
+            err_msg = f"An unexpected calculation error occurred: {e}"
+            raise serializers.ValidationError({"roll_input": err_msg})
 
-        data['roll_input'] = input_formula
-        data['roll_value'] = roll_results['final_result']
-        data['raw_dice_rolls'] = roll_results['roll_details']
+        attrs['roll_input'] = input_formula
+        attrs['roll_value'] = roll_results['final_result']
+        attrs['raw_dice_rolls'] = roll_results['roll_details']
 
-        return data
+        return attrs
+
+    def create(self, validated_data):
+        return Roll.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        """Rolls are immutable and should not be updated."""
+        raise NotImplementedError("Roll records are immutable and cannot be updated.")
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -174,6 +210,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     This overrides the default logic to ensure Django's standard `authenticate`
     is used against our custom User model.
     """
+
+    def create(self, validated_data):
+        """Not used for token generation, but required by Pylint/abstract base class."""
+        raise NotImplementedError("Token serialization does not support direct creation.")
+
+    def update(self, instance, validated_data):
+        """Not used for token generation, but required by Pylint/abstract base class."""
+        raise NotImplementedError("Token serialization does not support direct updating.")
 
     def validate(self, attrs):
         username = attrs.get(User.USERNAME_FIELD)
@@ -202,26 +246,47 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
     recovery_key = serializers.CharField(required=True, write_only=True)
     new_password = serializers.CharField(required=True, write_only=True, min_length=8)
 
-    def validate(self, data):
-        username = data.get('username')
-        recovery_key = data.get('recovery_key')
+    def create(self, validated_data):
+        """Not used; logic is handled in .save()."""
+        raise NotImplementedError("This serializer is for password reset (update logic only).")
+
+    def update(self, instance, validated_data):
+        """Not used; logic is handled in .save()."""
+        raise NotImplementedError("This serializer is for password reset (update logic only).")
+
+    def validate(self, attrs):
+        """
+        Validates the username and recovery key combination.
+        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        """
+        username = attrs.get('username')
+        recovery_key = attrs.get('recovery_key')
+
         try:
             user = User.objects.get(**{User.USERNAME_FIELD: username})
-        except User.DoesNotExist:
-            raise ValidationError("Authentication failed. Invalid username or recovery key.")
+        except User.DoesNotExist as exc:
+            raise ValidationError(
+                "Authentication failed. Invalid username or recovery key."
+            ) from exc
+
         try:
             recovery_instance = RecoveryKey.objects.get(user=user)
-        except RecoveryKey.DoesNotExist:
-            raise ValidationError("Authentication failed. Invalid username or recovery key.")
+        except RecoveryKey.DoesNotExist as exc:
+            raise ValidationError(
+                "Authentication failed. Invalid username or recovery key."
+            ) from exc
 
         if not check_password(recovery_key, recovery_instance.recovery_key_hash):
             raise ValidationError("Authentication failed. Invalid username or recovery key.")
 
         self.user = user
-        return data
+        return attrs
 
-    def save(self):
-
+    def save(self, **kwargs):
+        """
+        Saves the new password. The recovery key is intentionally NOT invalidated here,
+        as it is designed to be a multi-use key.
+        """
         new_password = self.validated_data.get('new_password')
         self.user.set_password(new_password)
         self.user.save()
@@ -238,15 +303,27 @@ class UserPasswordChangeSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, required=True)
     new_password_confirm = serializers.CharField(write_only=True, required=True)
 
+    def create(self, validated_data):
+        """Not used; logic is handled in .save()."""
+        raise NotImplementedError("This serializer is for password change (update logic only).")
+
+    def update(self, instance, validated_data):
+        """Not used; logic is handled in .save()."""
+        raise NotImplementedError("This serializer is for password change (update logic only).")
+
     def validate_old_password(self, value):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError("Incorrect current password.")
         return value
 
-    def validate(self, data):
-        new_password = data.get('new_password')
-        new_password_confirm = data.get('new_password_confirm')
+    def validate(self, attrs):
+        """
+        Validates the new password matching and complexity.
+        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        """
+        new_password = attrs.get('new_password')
+        new_password_confirm = attrs.get('new_password_confirm')
         user = self.context['request'].user
 
         if new_password != new_password_confirm:
@@ -257,11 +334,11 @@ class UserPasswordChangeSerializer(serializers.Serializer):
         try:
             validate_password(new_password, user)
         except ValidationError as e:
-            raise serializers.ValidationError({"new_password": list(e.messages)})
+            raise serializers.ValidationError({"new_password": list(e)})
 
-        return data
+        return attrs
 
-    def save(self):
+    def save(self, **kwargs):
         user = self.context['request'].user
         user.set_password(self.validated_data['new_password'])
         user.save()

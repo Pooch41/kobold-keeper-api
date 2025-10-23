@@ -1,3 +1,8 @@
+"""
+Authentication module containing custom JWT serializers, password reset serializers,
+and authentication-related view classes.
+"""
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.generics import CreateAPIView
@@ -71,7 +76,7 @@ class PasswordResetWithKeyView(APIView):
     """
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = PasswordResetWithKeySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
