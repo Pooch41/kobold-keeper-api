@@ -15,7 +15,7 @@ This project is built with Python and Django Rest Framework (DRF), offering a ro
 
 ### Key Features
 
-* **Advanced Dice Roller:** Supports complex algebraic expressions, `drop/keep` logic, and modifiers (e.g., `3d6 + 5`, `2d20kh1`, `4dF`).
+* **Advanced Dice Roller:** Supports complex algebraic expressions, `drop/keep` logic, and modifiers (e.g., `3d6 + 5`, `2d20kh1`, `1d8 + 5d6 + 4`).
 * **Roll analytics:** Allows users to review their past and present rolls in terms of raw dice breakdown, averages and comparisons versus statistical averages of the standard dice type
 * **Secure User Management:** Full authentication and authorization via Django's built-in system and custom JWT logic.
 * **Asynchronous Tasks (Celery):** Handles long-running or resource-intensive tasks, such as large data exports or complex simulations, without blocking the main API thread.
