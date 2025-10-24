@@ -2,7 +2,6 @@
 
 [![Build Status](https://img.shields.io/badge/Status-Feature%20Complete-green)](https://github.com/pooch41/kobold-keeper-api)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Project Maintenance](https://img.shields.io/maintenance/yes/2025)](https://github.com/pooch41/kobold-keeper-api)
 [![GitHub contributors](https://img.shields.io/github/contributors/Pooch41/kobold-keeper-api)](https://github.com/Pooch41/kobold-keeper-api/graphs/contributors)[![Project Maintenance](https://img.shields.io/maintenance/yes/2025)](https://github.com/your-repo/kobold-keeper-api)
 
 ---

@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
 
     'kobold_keeper.apps.KoboldKeeperConfig',
     'api'
@@ -141,7 +142,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'NON_FIELD_ERRORS_KEY': 'error',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'NON_FIELD_ERRORS_KEY': 'error'
 }
 
 SIMPLE_JWT = {
@@ -163,3 +165,10 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
 CELERY_TIMEZONE = 'CET'
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Kobold Keeper API',
+    'DESCRIPTION': 'API documentation for Kobold Keeper.',
+    'VERSION': '0.1.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
