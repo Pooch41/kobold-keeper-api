@@ -209,3 +209,5 @@ __marimo__/
 # Pycharm
 
 .idea
+api/migrations
+staticfiles

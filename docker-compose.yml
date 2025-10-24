@@ -29,6 +29,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: kobold_keeper_api
+    # Assumes start.sh runs gunicorn/etc.
     command: /usr/local/bin/start.sh
     volumes:
       - .:/app
@@ -55,6 +56,30 @@ services:
       dockerfile: Dockerfile
     container_name: kobold_keeper_worker
     command: celery -A kobold_keeper worker -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTES_DB}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: always
+
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobold_keeper_beat
+    command: celery -A kobold_keeper beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
     volumes:
       - .:/app
     env_file:

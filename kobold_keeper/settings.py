@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_spectacular',
+    'django_celery_beat',
 
     'kobold_keeper.apps.KoboldKeeperConfig',
     'api'
@@ -172,3 +173,6 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')

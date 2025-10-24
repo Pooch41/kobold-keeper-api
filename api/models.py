@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
+from django.core.validators import MinValueValidator
 
 from .utils import generate_key
 
@@ -145,3 +146,46 @@ class Roll(models.Model):
 
     def __str__(self):
         return f"Roll {self.roll_value} for {self.character.character_name}"
+
+class DailyLuckRecord(models.Model):
+    """
+    Stores the daily record of the 'luckiest' character based on the
+    average roll vs. theoretical average (Luck Index).
+    """
+    date = models.DateField(unique = True,)
+    character = models.ForeignKey('Character', on_delete=models.PROTECT)
+    character_name_snapshot = models.CharField(max_length=255)
+    group_name_snapshot = models.CharField(max_length=255)
+    luck_index = models.FloatField()
+    total_rolls_parsed = models.IntegerField(validators=[MinValueValidator(1)])
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.date} - {self.character.character_name} (Index: {self.luck_index:.4f})"
+
+
+class GroupPerformanceRecord(models.Model):
+    """
+    Stores the pre-calculated, long-term performance statistics for a Group.
+    This record is updated daily by a scheduled Celery task.
+    """
+    group = models.OneToOneField(Group, on_delete=models.CASCADE, related_name='performance_record')
+
+    average_luck_index = models.FloatField(default=0.0)
+    total_rolls = models.IntegerField(default=0)
+
+    lowest_roll = models.IntegerField(null=True, blank=True)
+    highest_roll = models.IntegerField(null=True, blank=True)
+
+
+    luckiest_player_name = models.CharField(max_length=255, default="N/A")
+    luckiest_player_score = models.FloatField(default=0.0)
+
+    least_lucky_player_name = models.CharField(max_length=255, default="N/A")
+    least_lucky_player_score = models.FloatField(default=0.0)
+
+
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Performance for {self.group.name} (Luck: {self.average_luck_index:.4f})"
