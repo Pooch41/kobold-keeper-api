@@ -69,9 +69,9 @@ class PasswordChangeView(APIView):
 
 class PasswordResetWithKeyView(APIView):
     """
-    Handles the final step of a password reset flow.
+    Handles the final step of a password reset flow using a permanent, multi-use recovery key.
 
-    The user provides a temporary key (usually sent via email) and a new password.
+    The user must provide their username, the recovery key, and the new password.
     This endpoint is public (AllowAny) because the user is not yet logged in.
     """
     permission_classes = [AllowAny]

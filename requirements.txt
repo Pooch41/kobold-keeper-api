@@ -37,3 +37,6 @@ pytest-django>=4.11,<5.0
 
 pylint
 pylint-django
+
+#DRF Spectacular
+drf-spectacular
