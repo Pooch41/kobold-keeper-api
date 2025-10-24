@@ -1,5 +1,6 @@
 import json
-from typing import Dict, Any
+import re
+from typing import Dict, Any, List
 
 from django.db.models import Avg, Count, Max, Min
 
@@ -63,6 +64,37 @@ class LuckAnalyticsService:
     def __init__(self, roll_queryset):
         self.roll_queryset = roll_queryset
 
+    def _get_all_dice_components(self) -> List[Dict[str, Any]]:
+        """
+        Fetches all raw_dice_rolls data, handles JSONField parsing variability (string vs. object),
+        and flattens the result into a list of individual dice component dictionaries,
+        filtering only for components where 'component_type' is 'dice'.
+        """
+        all_rolls_data = self.roll_queryset.values_list('raw_dice_rolls', flat=True)
+        all_dice_components = []
+
+        for roll_data in all_rolls_data:
+            parsed_roll = None
+
+            if roll_data is None:
+                continue
+
+            if isinstance(roll_data, str):
+                try:
+                    parsed_roll = json.loads(roll_data)
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing raw_dice_rolls string: {e}")
+                    continue
+            else:
+                parsed_roll = roll_data
+
+            if isinstance(parsed_roll, list):
+                for component in parsed_roll:
+                    if component.get("component_type") == "dice":
+                        all_dice_components.append(component)
+
+        return all_dice_components
+
     def get_modified_roll_metrics(self) -> Dict[str, Any]:
         """
         Calculates simple aggregation metrics (Avg, Min, Max, Count) based on the
@@ -92,33 +124,23 @@ class LuckAnalyticsService:
 
     def calculate_raw_dice_averages(self) -> Dict[str, Any]:
         """
-        Calculates statistics based on the raw, unmodified dice rolls stored as JSON
-        in the `raw_dice_rolls` field.
-
-        This requires loading and parsing the JSON data in Python, summing all individual
-        dice results across all rolls, and calculating a true average of the raw dice.
+        Calculates statistics based on the raw, unmodified dice rolls across ALL dice.
+        It sums all individual die rolls and counts how many dice were thrown.
 
         :return: A dictionary containing the 'avg_raw_roll' and 'total_raw_dice_count'.
         """
-        all_rolls_data = self.roll_queryset.values_list('raw_dice_rolls', flat=True)
 
-        if not all_rolls_data:
+        all_dice_components = self._get_all_dice_components()
+        if not all_dice_components:
             return {"avg_raw_roll": 0.0, "total_raw_dice_count": 0}
 
         total_raw_sum = 0
         total_raw_dice_count = 0
 
-        for raw_roll_json in all_rolls_data:
-            try:
-                parsed_roll_list = json.loads(raw_roll_json)
-                for die_group in parsed_roll_list:
-                    individual_rolls = die_group.get('rolls', [])
-                    total_raw_sum += sum(individual_rolls)
-                    total_raw_dice_count += len(individual_rolls)
-
-            except (json.JSONDecodeError, TypeError, AttributeError) as e:
-                print(f"Error parsing raw_dice_rolls: {e} for data: {raw_roll_json}")
-                continue
+        for component in all_dice_components:
+            individual_rolls = component.get("rolls", [])
+            total_raw_sum += sum(individual_rolls)
+            total_raw_dice_count += len(individual_rolls)
 
         avg_raw_roll = total_raw_sum / total_raw_dice_count if total_raw_dice_count > 0 else 0.0
 
@@ -126,3 +148,52 @@ class LuckAnalyticsService:
             "avg_raw_roll": round(avg_raw_roll, 2),
             "total_raw_dice_count": total_raw_dice_count
         }
+
+    def calculate_dice_type_averages(self) -> Dict[str, Any]:
+        """
+        Calculates the average roll value and count for each specific die type (d4, d6, d20, etc.)
+        by parsing the 'formula' field using regex.
+        """
+        all_dice_components = self._get_all_dice_components()
+
+        if not all_dice_components:
+            return {}
+
+        DICE_TYPE_PATTERN = re.compile(r'd(\d+)')
+        type_tracker = {}
+
+        for component in all_dice_components:
+            formula = component.get('formula', '')
+            individual_rolls = component.get('rolls', [])
+
+            match = DICE_TYPE_PATTERN.search(formula)
+
+            if match and individual_rolls:
+                d_type_str = match.group(1)
+
+                try:
+                    d_type = int(d_type_str)
+                except ValueError:
+                    continue
+
+                if d_type not in type_tracker:
+                    type_tracker[d_type] = {'sum': 0, 'count': 0}
+
+                type_tracker[d_type]['sum'] += sum(individual_rolls)
+                type_tracker[d_type]['count'] += len(individual_rolls)
+
+        results = {}
+        for d_type, data in type_tracker.items():
+            die_label = f"d{d_type}"
+            avg = data['sum'] / data['count'] if data['count'] > 0 else 0.0
+
+            theoretical_avg = (d_type + 1) / 2
+
+            results[die_label] = {
+                "average_roll": round(avg, 2),
+                "theoretical_average": round(theoretical_avg, 2),
+                "roll_count": data['count'],
+                "sum": data['sum']
+            }
+
+        return dict(sorted(results.items(), key=lambda item: int(item[0][1:])))

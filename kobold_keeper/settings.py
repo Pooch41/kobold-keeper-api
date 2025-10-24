@@ -10,17 +10,17 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
 import os
-from dotenv import load_dotenv
 from datetime import timedelta
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 load_dotenv()
 secret_key = os.getenv('SECRET_KEY')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -33,7 +33,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -45,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
 
     'kobold_keeper.apps.KoboldKeeperConfig',
     'api'
@@ -79,7 +79,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'kobold_keeper.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
@@ -93,7 +92,6 @@ DATABASES = {
         'PORT': os.environ.get('DB_PORT'),
     }
 }
-
 
 AUTH_USER_MODEL = 'api.User'
 LOGIN_URL = '/login'
@@ -116,7 +114,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -127,7 +124,6 @@ TIME_ZONE = 'Europe/Berlin'
 USE_I18N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -146,7 +142,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'NON_FIELD_ERRORS_KEY': 'error',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'NON_FIELD_ERRORS_KEY': 'error'
 }
 
 SIMPLE_JWT = {
@@ -168,3 +165,10 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
 CELERY_TIMEZONE = 'CET'
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Kobold Keeper API',
+    'DESCRIPTION': 'API documentation for Kobold Keeper.',
+    'VERSION': '0.1.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}

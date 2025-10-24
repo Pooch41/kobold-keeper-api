@@ -1,3 +1,8 @@
+"""
+Authentication module containing custom JWT serializers, password reset serializers,
+and authentication-related view classes.
+"""
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.generics import CreateAPIView
@@ -64,14 +69,14 @@ class PasswordChangeView(APIView):
 
 class PasswordResetWithKeyView(APIView):
     """
-    Handles the final step of a password reset flow.
+    Handles the final step of a password reset flow using a permanent, multi-use recovery key.
 
-    The user provides a temporary key (usually sent via email) and a new password.
+    The user must provide their username, the recovery key, and the new password.
     This endpoint is public (AllowAny) because the user is not yet logged in.
     """
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = PasswordResetWithKeySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()

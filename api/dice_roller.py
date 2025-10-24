@@ -5,7 +5,6 @@ from typing import Dict, Any
 
 class InvalidRollFormula(Exception):
     """Custom exception raised when the provided dice formula is syntactically invalid."""
-    pass
 
 
 class DiceRoller:
@@ -39,8 +38,10 @@ class DiceRoller:
         drop_keep_key = match_dice.group(3)
         drop_keep_amount_str = match_dice.group(4)
         drop_keep_amount = int(drop_keep_amount_str) if drop_keep_amount_str else 0
+
         if num_dice < 1 or die_size < 1:
             raise InvalidRollFormula("Dice count and size must be at least 1.")
+
         if drop_keep_key and (drop_keep_amount <= 0 or drop_keep_amount >= num_dice):
             raise InvalidRollFormula(
                 f"Drop/Keep amount ({drop_keep_amount}) "
@@ -59,21 +60,17 @@ class DiceRoller:
             }
 
         sorted_rolls = sorted(rolls)
-        retained_rolls = []
-        dropped_rolls = []
 
-        if drop_keep_key == 'dl':
-            dropped_rolls = sorted_rolls[:drop_keep_amount]
-            retained_rolls = sorted_rolls[drop_keep_amount:]
-        elif drop_keep_key == 'kl':
-            retained_rolls = sorted_rolls[:drop_keep_amount]
-            dropped_rolls = sorted_rolls[drop_keep_amount:]
-        elif drop_keep_key == 'dh':
-            dropped_rolls = sorted_rolls[-drop_keep_amount:]
-            retained_rolls = sorted_rolls[:-drop_keep_amount]
-        elif drop_keep_key == 'kh':
-            retained_rolls = sorted_rolls[-drop_keep_amount:]
-            dropped_rolls = sorted_rolls[:-drop_keep_amount]
+        logic_map = {
+            'dl': lambda r, a: (r[:a], r[a:]),
+            'kl': lambda r, a: (r[a:], r[:a]),
+            'dh': lambda r, a: (r[-a:], r[:-a]),
+            'kh': lambda r, a: (r[:-a], r[-a:]),
+        }
+
+        dropped_rolls, retained_rolls = logic_map[drop_keep_key](
+            sorted_rolls, drop_keep_amount
+        )
 
         return {
             'component_type': 'dice',
@@ -84,6 +81,45 @@ class DiceRoller:
             'retained_rolls': retained_rolls,
             'total': sum(retained_rolls),
         }
+
+    @classmethod
+    def _process_roll_term(cls, term: str) -> Dict[str, Any]:
+        """
+        Processes a single token (term) from the formula, determining if it's a
+        modifier or a dice roll, and executing the roll if necessary.
+
+        :param term: The token string (e.g., '5' or '3d6').
+        :raises InvalidRollFormula: If parsing or dice rolling fails.
+        :return: A dictionary detail containing 'total' and component data.
+        """
+        if term.isdigit():
+            try:
+                component_total = int(term)
+            except ValueError as exc:
+                raise InvalidRollFormula(f"Invalid modifier value: {term}") from exc
+
+            return {
+                'component_type': 'modifier',
+                'formula': term,
+                'value': component_total,
+                'total': component_total
+            }
+
+        if 'd' in term or 'D' in term:
+            try:
+                detail = cls._parse_and_roll_dice(term)
+                if 'total' not in detail:
+                    raise InvalidRollFormula(f"Dice roll detail missing total for term: {term}")
+
+                detail['total'] = detail['total']
+                return detail
+            except InvalidRollFormula as exc:
+                raise InvalidRollFormula(f"Dice component validation failed for: {term}") from exc
+            except ValueError as exc:
+                raise InvalidRollFormula(
+                    f"Internal conversion error in dice format: {term}") from exc
+
+        raise InvalidRollFormula(f"Unrecognized term: {term}")  # Removed the redundant 'else:'
 
     @classmethod
     def calculate_roll(cls, formula: str) -> Dict[str, Any]:
@@ -114,33 +150,14 @@ class DiceRoller:
 
             if start > last_end:
                 unconsumed_str = formula[last_end:start]
-                if unconsumed_str and not unconsumed_str.strip():
-                    pass
-                else:
+                if unconsumed_str and unconsumed_str.strip():
                     raise InvalidRollFormula(
                         f"Formula contains invalid syntax: '{unconsumed_str}'")
 
             last_end = end
-            component_total = 0
 
-            if term.isdigit():
-                component_total = int(term)
-                detail = {
-                    'component_type': 'modifier',
-                    'formula': term,
-                    'value': component_total
-                }
-
-            elif 'd' in term or 'D' in term:
-                try:
-                    detail = cls._parse_and_roll_dice(term)
-                    component_total = detail['total']
-                except ValueError:
-                    raise InvalidRollFormula(
-                        f"Invalid drop/keep format or unrecognized suffix in: {term}")
-
-            else:
-                raise InvalidRollFormula(f"Unrecognized term: {term}")
+            detail = cls._process_roll_term(term)
+            component_total = detail['total']
 
             if sign == '-':
                 total -= component_total

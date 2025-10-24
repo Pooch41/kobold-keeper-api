@@ -1,9 +1,9 @@
 from rest_framework import viewsets, permissions
-from rest_framework.mixins import CreateModelMixin
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.mixins import CreateModelMixin
 
+from .models import Group, Character, Roll
 from .serializers import GroupSerializer, CharacterSerializer, RollSerializer, UserSerializer
-from .models import Group, Character, Roll, User
 
 
 class GroupViewSet(viewsets.ModelViewSet):

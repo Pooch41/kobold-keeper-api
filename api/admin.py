@@ -1,3 +1,7 @@
+"""
+Configuration for the Django Admin interface for the 'api' application models.
+"""
+
 from django.contrib import admin
 
 from .models import Group, Character, Roll
