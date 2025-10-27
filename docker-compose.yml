@@ -23,13 +23,18 @@ services:
     container_name: redis_cache
     expose:
       - 6379
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: kobold_keeper_api
-    # Assumes start.sh runs gunicorn/etc.
     command: /usr/local/bin/start.sh
     volumes:
       - .:/app
@@ -70,7 +75,7 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
 
@@ -94,7 +99,7 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
 volumes:

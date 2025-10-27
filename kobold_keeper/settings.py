@@ -16,6 +16,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+import celery_config
+
 load_dotenv()
 secret_key = os.getenv('SECRET_KEY')
 
@@ -165,8 +167,6 @@ CELERY_TASK_SERIALIZER = 'json'
 
 CELERY_RESULT_SERIALIZER = 'json'
 
-CELERY_TIMEZONE = 'CET'
-
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Kobold Keeper API',
     'DESCRIPTION': 'API documentation for Kobold Keeper.',
@@ -176,3 +176,9 @@ SPECTACULAR_SETTINGS = {
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+CELERY_BEAT_SCHEDULE = celery_config.CELERY_BEAT_SCHEDULE
+CELERY_TASK_QUEUES = celery_config.CELERY_TASK_QUEUES
+
+
+CELERY_TIMEZONE = 'UTC'

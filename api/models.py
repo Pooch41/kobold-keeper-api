@@ -143,6 +143,7 @@ class Roll(models.Model):
     roll_value = models.IntegerField()
     raw_dice_rolls = models.JSONField(default=dict)
     rolled_at = models.DateTimeField(default=timezone.now)
+    luck_index = models.FloatField(null=True, blank=True)
 
     def __str__(self):
         return f"Roll {self.roll_value} for {self.character.character_name}"
@@ -162,7 +163,6 @@ class DailyLuckRecord(models.Model):
 
     def __str__(self):
         return f"{self.date} - {self.character.character_name} (Index: {self.luck_index:.4f})"
-
 
 class GroupPerformanceRecord(models.Model):
     """

@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import (
@@ -11,8 +12,96 @@ from rest_framework.exceptions import (
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .dice_roller import DiceRoller, InvalidRollFormula
-from .models import User, Group, Character, Roll, RecoveryKey
+from .models import User, Group, Character, Roll, RecoveryKey, GroupPerformanceRecord
 from .utils import generate_key
+
+
+class GroupPerformanceRecordSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the GroupPerformanceRecord model, providing luck and roll statistics.
+    """
+    last_updated = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+
+    class Meta:
+        model = GroupPerformanceRecord
+        fields = [
+            'average_luck_index',
+            'total_rolls',
+            'lowest_roll',
+            'highest_roll',
+            'luckiest_player_name',
+            'luckiest_player_score',
+            'least_lucky_player_name',
+            'least_lucky_player_score',
+            'last_updated',
+        ]
+        read_only_fields = fields
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Group model (Campaigns).
+    Includes nested, read-only performance analytics from GroupPerformanceRecord.
+    """
+    owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
+    characters = serializers.SlugRelatedField(
+        many=True,
+        read_only=True,
+        slug_field='character_name'
+    )
+
+    performance = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Group
+        fields = ['id',
+                  'group_name',
+                  'owner',
+                  'characters',
+                  'performance',
+                  ]
+        read_only_fields = ['id',
+                            'owner',
+                            'performance',
+                            ]
+
+    def get_performance(self, obj):
+        """
+        Retrieves and serializes the single GroupPerformanceRecord linked
+        via the 'performance_record' OneToOne relation.
+
+        Args:
+            obj (Group): The current Group instance.
+
+        Returns:
+            dict or None: Serialized record data or None if no record exists yet.
+        """
+        try:
+            performance_instance = obj.performance_record
+            return GroupPerformanceRecordSerializer(performance_instance).data
+
+        except ObjectDoesNotExist:
+            return None
+        except Exception as e:
+            print(f"Error retrieving performance record for group {obj.id}: {e}")
+            return None
+
+    def create(self, validated_data):
+        return Group.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        instance.group_name = validated_data.get('group_name', instance.group_name)
+        instance.save()
+        return instance
+
+    def create(self, validated_data):
+        return Group.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        instance.group_name = validated_data.get('group_name', instance.group_name)
+        instance.save()
+        return instance
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -53,40 +142,6 @@ class UserSerializer(serializers.ModelSerializer):
         but we add this for completeness.
         """
         raise NotImplementedError("This serializer is for user registration (create) only.")
-
-
-class GroupSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the Group model (Campaigns).
-    The analytics fields are read-only, populated by a background Celery task.
-    """
-    owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
-
-    characters = serializers.SlugRelatedField(
-        many=True,
-        read_only=True,
-        slug_field='character_name'
-    )
-
-    class Meta:
-        model = Group
-        fields = ['id',
-                  'group_name',
-                  'owner',
-                  'characters'
-                  ]
-        read_only_fields = ['id',
-                            'owner',
-                            ]
-
-    def create(self, validated_data):
-        return Group.objects.create(**validated_data)
-
-    def update(self, instance, validated_data):
-        instance.group_name = validated_data.get('group_name', instance.group_name)
-        instance.save()
-        return instance
-
 
 class CharacterSerializer(serializers.ModelSerializer):
     """
