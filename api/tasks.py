@@ -1,7 +1,7 @@
 import logging
 from celery import shared_task
 from django.db import transaction
-from django.db.models import Avg
+from django.db.models import Avg, Min, Max  # Import Min and Max
 from django.utils import timezone
 from .models import Roll, Group, GroupPerformanceRecord, DailyLuckRecord, Character
 
@@ -34,11 +34,21 @@ def update_all_group_performance_records():
             least_lucky_player_name = "N/A"
             least_lucky_player_score = 0.0
 
+            lowest_roll = None
+            highest_roll = None
+
             if total_rolls == 0:
                 logger.info(f"TASK: Group '{group.group_name}' has 0 eligible rolls. Resetting stats to defaults.")
             else:
-                avg_luck_index_result = eligible_rolls.aggregate(Avg('luck_index'))
-                average_luck_index = avg_luck_index_result.get('luck_index__avg') or 0.0
+                stats_results = eligible_rolls.aggregate(
+                    Avg('luck_index'),
+                    Min('final_roll_value'),
+                    Max('final_roll_value')
+                )
+
+                average_luck_index = stats_results.get('luck_index__avg') or 0.0
+                lowest_roll = stats_results.get('final_roll_value__min')
+                highest_roll = stats_results.get('final_roll_value__max')
 
                 player_luck_stats = eligible_rolls.values(
                     'character__character_name'
@@ -48,7 +58,7 @@ def update_all_group_performance_records():
 
                 if player_luck_stats.exists():
                     luckiest = player_luck_stats.first()
-                    least_lucky = player_luck_stats.last() # Because it's ordered descending
+                    least_lucky = player_luck_stats.last()  # Because it's ordered descending
 
                     luckiest_player_name = luckiest['character__character_name']
                     luckiest_player_score = luckiest['avg_luck']
@@ -61,6 +71,8 @@ def update_all_group_performance_records():
                 defaults={
                     'average_luck_index': average_luck_index,
                     'total_rolls': total_rolls,
+                    'lowest_roll': lowest_roll,
+                    'highest_roll': highest_roll,
                     'luckiest_player_name': luckiest_player_name,
                     'luckiest_player_score': luckiest_player_score,
                     'least_lucky_player_name': least_lucky_player_name,
@@ -137,6 +149,7 @@ def delete_nameless_entities():
     Returns the count of deleted entities.
     """
     logger.info("TASK: Starting delete_nameless_entities...")
+
     nameless_char_query = Character.objects.filter(
         character_name="Nameless"
     )
