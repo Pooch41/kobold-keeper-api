@@ -87,39 +87,39 @@ class RollViewSet(ModelViewSet):
         serializer.save()
 
 
+def _get_analytics_queryset_and_name(user, character_id, group_id) -> tuple[QuerySet[Roll], str]:
+    """
+    Helper function to determine the scope of the roll query, ensuring ownership checks.
+    """
+    if character_id:
+        if not Character.objects.filter(id=character_id, user=user).exists():
+            raise NotFound(detail="Character not found or not owned by the user.")
+        queryset = RollQueryFilter.for_character(character_id).filter(character__user=user)
+        scope_name = f"Character: {character_id}"
+        return queryset, scope_name
+
+    if group_id:
+        if not Group.objects.filter(id=group_id, owner=user).exists():
+            raise NotFound(detail="Group not found or not owned by the user.")
+        queryset = RollQueryFilter.for_group(group_id).filter(character__user=user)
+        scope_name = f"Group: {group_id}"
+        return queryset, scope_name
+
+    queryset = Roll.objects.filter(character__user=user)
+    return queryset, "Global"
+
+
 class LuckAnalyticsView(APIView):
     """
-    API endpoint for retrieving luck and rolling statistics.
-    ...
+    API endpoint for retrieving general luck and rolling statistics (Averages, Min/Max, Overall Luck Index).
+    It deliberately excludes character-specific metrics like 'luckiest player', which is in its own view.
     """
-
     permission_classes = [IsAuthenticated]
-
-    def _get_scoped_queryset_and_name(self, user, character_id, group_id) -> tuple[QuerySet[Roll], str]:
-        """
-        Helper method to determine the scope of the roll query.
-        """
-        if character_id:
-            if not Character.objects.filter(id=character_id, user=user).exists():
-                raise NotFound(detail="Character not found or not owned by the user.")
-            queryset = RollQueryFilter.for_character(character_id)
-            scope_name = f"Character: {character_id}"
-            return queryset, scope_name
-
-        if group_id:
-            if not Group.objects.filter(id=group_id, owner=user).exists():
-                raise NotFound(detail="Group not found or not owned by the user.")
-            queryset = RollQueryFilter.for_group(group_id)
-            scope_name = f"Group: {group_id}"
-            return queryset, scope_name
-
-        queryset = Roll.objects.filter(character__user=user)
-        return queryset, "Global"
 
     def _get_metrics_response_data(self, roll_queryset: QuerySet[Roll], scope: str) -> dict:
         """
         Calculates all required analytics using the service, handles errors,
-        and formats the final response dictionary. (Resolves R0914)
+        and formats the final response dictionary.
         """
         analytics_service = LuckAnalyticsService(roll_queryset)
 
@@ -127,6 +127,7 @@ class LuckAnalyticsView(APIView):
             modified_metrics = analytics_service.get_modified_roll_metrics()
             raw_metrics = analytics_service.calculate_raw_dice_averages()
             dice_type_breakdown = analytics_service.calculate_dice_type_averages()
+            overall_luck_index = analytics_service.calculate_luck_index()
 
         except Exception as e:
             raise APIException(
@@ -142,6 +143,7 @@ class LuckAnalyticsView(APIView):
             "metrics": {
                 "modified": modified_metrics,
                 "raw_dice": raw_metrics,
+                "overall_luck_index": overall_luck_index,
                 "dice_type_breakdown": dice_type_breakdown,
             }
         }
@@ -155,7 +157,7 @@ class LuckAnalyticsView(APIView):
         group_id = request.query_params.get('group_id')
 
         try:
-            roll_queryset, scope = self._get_scoped_queryset_and_name(
+            roll_queryset, scope = _get_analytics_queryset_and_name(
                 user, character_id, group_id
             )
         except NotFound as e:
@@ -174,3 +176,44 @@ class LuckAnalyticsView(APIView):
         response_data = self._get_metrics_response_data(roll_queryset, scope)
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class LuckiestRollerView(APIView):
+    """
+    API endpoint for retrieving the single character with the highest
+    luck delta ratio (Actual vs. Theoretical Sum) for a given scope.
+    This is intentionally separated from general luck statistics.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """
+        Calculates and returns the character with the highest luck delta ratio.
+        """
+        user = request.user
+        character_id = request.query_params.get('character_id')
+        group_id = request.query_params.get('group_id')
+
+        try:
+            roll_queryset, scope = _get_analytics_queryset_and_name(
+                user, character_id, group_id
+            )
+        except NotFound as e:
+            raise e
+        except Exception as e:
+            raise APIException(f"Error determining query scope: {e}") from e
+
+        if not roll_queryset.exists():
+            return Response({
+                "scope": scope,
+                "detail": "No roll data found for this scope.",
+                "luckiest_roller": {}
+            }, status=status.HTTP_200_OK)
+
+        analytics_service = LuckAnalyticsService(roll_queryset)
+        luckiest_roller_data = analytics_service.get_luckiest_roller_by_delta()
+
+        return Response({
+            "scope": scope,
+            "luckiest_roller": luckiest_roller_data
+        }, status=status.HTTP_200_OK)

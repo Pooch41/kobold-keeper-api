@@ -209,3 +209,6 @@ __marimo__/
 # Pycharm
 
 .idea
+api/migrations
+staticfiles
+test_cron_jobs.sh
