@@ -211,4 +211,4 @@ __marimo__/
 .idea
 api/migrations
 staticfiles
-testing/test_cron_jobs.sh
+test_cron_jobs.sh
