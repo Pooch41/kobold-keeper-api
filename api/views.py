@@ -1,17 +1,44 @@
 from django.contrib.auth import get_user_model
-from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, NotFound, APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
+from django.shortcuts import get_object_or_404
 
-from .dice_reader import LuckAnalyticsService, RollQueryFilter
+from .dice_reader import LuckAnalyticsService
 from .models import Group, Character, Roll
 from .serializers import GroupSerializer, CharacterSerializer, RollSerializer
 
 User = get_user_model()
+
+
+def _get_analytics_queryset_and_name(user: User, character_id: str = None, group_id: str = None):
+    """
+    Safely retrieves a Roll QuerySet for analytics, enforcing that
+    the requested character or group belongs to the authenticated user.
+
+    CRITICAL FIX: Uses get_object_or_404 to ensure that if a character/group
+    is specified, it belongs to the user, preventing a BOLA vulnerability.
+    """
+
+
+    user_owned_rolls = Roll.objects.filter(character__owner=user)
+
+    if character_id:
+        character = get_object_or_404(Character.objects.filter(owner=user), pk=character_id)
+        queryset = user_owned_rolls.filter(character=character)
+        scope = f"Character: {character.character_name}"
+    elif group_id:
+        group = get_object_or_404(Group.objects.filter(owner=user), pk=group_id)
+        queryset = user_owned_rolls.filter(group=group)
+        scope = f"Group: {group.group_name}"
+    else:
+        queryset = user_owned_rolls
+        scope = "User's Entire Collection"
+
+    return queryset, scope
 
 
 class GroupViewSet(ModelViewSet):
@@ -46,24 +73,20 @@ class CharacterViewSet(ModelViewSet):
 
     def get_queryset(self):
         """
-        Ensures users can only view characters belonging to Groups they own.
-        This prevents viewing characters in shared groups or groups owned by others.
+        Ensures users can only view and manage Characters they own.
         """
-        return Character.objects.filter(group__owner=self.request.user).order_by('character_name')
+        return Character.objects.filter(owner=self.request.user).order_by('character_name')
 
     def perform_create(self, serializer):
         """
-        Validates ownership of the selected group and sets the character's owner.
+        Injects the current authenticated user as the `owner` during creation.
         """
-        group_instance = serializer.validated_data.get('group')
-        if group_instance.owner != self.request.user:
-            raise PermissionDenied("You don't have permission to create characters in this group.")
-        serializer.save(user=self.request.user)
+        serializer.save(owner=self.request.user)
 
 
 class RollViewSet(ModelViewSet):
     """
-    ViewSet for managing Roll history records.
+    ViewSet for managing Roll resources.
     Endpoint: /rolls/
     """
     serializer_class = RollSerializer
@@ -71,86 +94,37 @@ class RollViewSet(ModelViewSet):
 
     def get_queryset(self):
         """
-        Ensures users can only view rolls associated with groups they own.
-        Roll -> Character -> Group -> Owner
+        Ensures users only see rolls associated with their characters.
+
+        PERFORMANCE FIX: Added select_related to fix N+1 Query Problem.
+        This fetches the character and group data in one query for serialization.
         """
-        return Roll.objects.filter(character__group__owner=self.request.user).order_by('-id')
+        return Roll.objects.filter(
+            character__owner=self.request.user
+        ).select_related('character', 'group').order_by('-rolled_at')
 
     def perform_create(self, serializer):
         """
-        Validates that the character the roll is being created for is in a group
-        owned by the current user.
+        Injects the character's owner (current user) during roll creation and
+        ensures the character belongs to the user.
         """
-        character_instance = serializer.validated_data.get('character')
-        if character_instance.group.owner != self.request.user:
-            raise PermissionDenied("You do not have permission to record a roll for this character.")
+        character = serializer.validated_data['character']
+        if character.owner != self.request.user:
+            raise PermissionDenied("You can only create rolls for your own characters.")
+
         serializer.save()
 
 
-def _get_analytics_queryset_and_name(user, character_id, group_id) -> tuple[QuerySet[Roll], str]:
+class AnalyticsView(APIView):
     """
-    Helper function to determine the scope of the roll query, ensuring ownership checks.
-    """
-    if character_id:
-        if not Character.objects.filter(id=character_id, user=user).exists():
-            raise NotFound(detail="Character not found or not owned by the user.")
-        queryset = RollQueryFilter.for_character(character_id).filter(character__user=user)
-        scope_name = f"Character: {character_id}"
-        return queryset, scope_name
-
-    if group_id:
-        if not Group.objects.filter(id=group_id, owner=user).exists():
-            raise NotFound(detail="Group not found or not owned by the user.")
-        queryset = RollQueryFilter.for_group(group_id).filter(character__user=user)
-        scope_name = f"Group: {group_id}"
-        return queryset, scope_name
-
-    queryset = Roll.objects.filter(character__user=user)
-    return queryset, "Global"
-
-
-class LuckAnalyticsView(APIView):
-    """
-    API endpoint for retrieving general luck and rolling statistics (Averages, Min/Max, Overall Luck Index).
-    It deliberately excludes character-specific metrics like 'luckiest player', which is in its own view.
+    API endpoint for retrieving general roll statistics (min, max, average)
+    for a given scope (user, character, or group).
     """
     permission_classes = [IsAuthenticated]
 
-    def _get_metrics_response_data(self, roll_queryset: QuerySet[Roll], scope: str) -> dict:
-        """
-        Calculates all required analytics using the service, handles errors,
-        and formats the final response dictionary.
-        """
-        analytics_service = LuckAnalyticsService(roll_queryset)
-
-        try:
-            modified_metrics = analytics_service.get_modified_roll_metrics()
-            raw_metrics = analytics_service.calculate_raw_dice_averages()
-            dice_type_breakdown = analytics_service.calculate_dice_type_averages()
-            overall_luck_index = analytics_service.calculate_luck_index()
-
-        except Exception as e:
-            raise APIException(
-                detail=f"An error occurred during calculation: {str(e)}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            ) from e
-
-        total_rolls_count = modified_metrics.pop("total_rolls")
-
-        return {
-            "scope": scope,
-            "total_rolls": total_rolls_count,
-            "metrics": {
-                "modified": modified_metrics,
-                "raw_dice": raw_metrics,
-                "overall_luck_index": overall_luck_index,
-                "dice_type_breakdown": dice_type_breakdown,
-            }
-        }
-
     def get(self, request, *args, **kwargs):
         """
-        Handles the GET request by determining the scope and running the analysis.
+        Calculates and returns general statistics (Min/Max/Avg).
         """
         user = request.user
         character_id = request.query_params.get('character_id')
@@ -165,17 +139,21 @@ class LuckAnalyticsView(APIView):
         except Exception as e:
             raise APIException(f"Error determining query scope: {e}") from e
 
+
         if not roll_queryset.exists():
             return Response({
                 "scope": scope,
                 "detail": "No roll data found for this scope.",
-                "total_rolls": 0,
-                "metrics": {}
+                "statistics": {}
             }, status=status.HTTP_200_OK)
 
-        response_data = self._get_metrics_response_data(roll_queryset, scope)
+        analytics_service = LuckAnalyticsService(roll_queryset)
+        stats = analytics_service.get_general_statistics()
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        return Response({
+            "scope": scope,
+            "statistics": stats
+        }, status=status.HTTP_200_OK)
 
 
 class LuckiestRollerView(APIView):
@@ -195,6 +173,7 @@ class LuckiestRollerView(APIView):
         group_id = request.query_params.get('group_id')
 
         try:
+            # Uses the BOLA-safe helper function
             roll_queryset, scope = _get_analytics_queryset_and_name(
                 user, character_id, group_id
             )

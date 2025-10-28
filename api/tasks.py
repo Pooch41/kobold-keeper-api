@@ -1,7 +1,7 @@
 import logging
 from celery import shared_task
 from django.db import transaction
-from django.db.models import Avg, Min, Max  # Import Min and Max
+from django.db.models import Avg, Min, Max, F, Count
 from django.utils import timezone
 from .models import Roll, Group, GroupPerformanceRecord, DailyLuckRecord, Character
 
@@ -17,38 +17,56 @@ def update_all_group_performance_records():
     """
     try:
         logger.info("TASK: Starting update_all_group_performance_records...")
-        groups = Group.objects.all()
+        today = timezone.localdate()
+
+        group_ids_with_rolls = Roll.objects.filter(
+            rolled_at__date=today,
+            luck_index__isnull=False
+        ).values_list('group_id', flat=True).distinct()
+
+        groups = Group.objects.filter(id__in=group_ids_with_rolls)
 
         if not groups.exists():
-            msg = "TASK: No groups found. Exiting."
+            msg = "TASK: No groups found with eligible rolls today. Exiting."
             logger.info(msg)
-            return msg
+            return {
+                'status': 'graceful_exit',
+                'message': "TASK: No groups processed for performance records."
+            }
 
         for group in groups:
-            eligible_rolls = Roll.objects.filter(group=group, character__isnull=False, luck_index__isnull=False)
+            eligible_rolls = Roll.objects.filter(
+                group=group,
+                rolled_at__date=today,
+                character__isnull=False,
+                luck_index__isnull=False
+            )
             total_rolls = eligible_rolls.count()
+
 
             average_luck_index = 0.0
             luckiest_player_name = "N/A"
             luckiest_player_score = 0.0
             least_lucky_player_name = "N/A"
             least_lucky_player_score = 0.0
-
             lowest_roll = None
             highest_roll = None
 
+            current_time = timezone.now()
+
             if total_rolls == 0:
-                logger.info(f"TASK: Group '{group.group_name}' has 0 eligible rolls. Resetting stats to defaults.")
+                logger.info(f"TASK: Group '{group.group_name}' has 0 eligible rolls today. Skipping.")
+                continue
             else:
                 stats_results = eligible_rolls.aggregate(
                     Avg('luck_index'),
-                    Min('final_roll_value'),
-                    Max('final_roll_value')
+                    Min('roll_value'),
+                    Max('roll_value')
                 )
 
                 average_luck_index = stats_results.get('luck_index__avg') or 0.0
-                lowest_roll = stats_results.get('final_roll_value__min')
-                highest_roll = stats_results.get('final_roll_value__max')
+                lowest_roll = stats_results.get('roll_value__min')
+                highest_roll = stats_results.get('roll_value__max')
 
                 player_luck_stats = eligible_rolls.values(
                     'character__character_name'
@@ -58,13 +76,14 @@ def update_all_group_performance_records():
 
                 if player_luck_stats.exists():
                     luckiest = player_luck_stats.first()
-                    least_lucky = player_luck_stats.last()  # Because it's ordered descending
+                    least_lucky = player_luck_stats.last()
 
                     luckiest_player_name = luckiest['character__character_name']
                     luckiest_player_score = luckiest['avg_luck']
 
                     least_lucky_player_name = least_lucky['character__character_name']
                     least_lucky_player_score = least_lucky['avg_luck']
+
 
             GroupPerformanceRecord.objects.update_or_create(
                 group=group,
@@ -77,14 +96,17 @@ def update_all_group_performance_records():
                     'luckiest_player_score': luckiest_player_score,
                     'least_lucky_player_name': least_lucky_player_name,
                     'least_lucky_player_score': least_lucky_player_score,
-                    'last_updated': timezone.now(),
+                    'last_updated': current_time,
                 }
             )
             logger.info(f"TASK: Updated Group Performance Record for '{group.group_name}' (Rolls: {total_rolls})")
 
         msg = "TASK: Successfully processed all groups for performance records."
         logger.info(msg)
-        return msg
+        return {
+            'status': 'success',
+            'message': msg
+        }
 
     except Exception as e:
         logger.error("FATAL ERROR during update_all_group_performance_records.", exc_info=True)
@@ -95,45 +117,65 @@ def update_all_group_performance_records():
 @transaction.atomic
 def calculate_luckiest_roller_of_the_day():
     """
-    Finds the luckiest roller across ALL groups for the current day
-    and records the winner in DailyLuckRecord. Returns a status dictionary.
+    Finds the roller with the highest AVERAGE luck index across ALL rolls for the current day
+    and records the winner in DailyLuckRecord.
+    The task now returns a structured dictionary for robust test verification.
     """
     try:
         today = timezone.localdate()
         logger.info(f"TASK: Starting calculate_luckiest_roller_of_the_day for {today}...")
 
-        luckiest_roll = Roll.objects.filter(
+        daily_luck_averages = Roll.objects.filter(
             rolled_at__date=today,
             luck_index__isnull=False
-        ).order_by('-luck_index').select_related('character', 'group').first()
+        ).values(
+            'character',
+            'character__character_name',
+            'group__group_name'
+        ).annotate(
+            avg_luck=Avg('luck_index')
+        ).order_by('-avg_luck')
 
-        if not luckiest_roll:
+        if not daily_luck_averages.exists():
             msg = "TASK: No processed rolls found for today. Exiting."
             logger.info(msg)
-            return {"status": "graceful_exit", "message": msg}
+            return {
+                'status': 'graceful_exit',
+                'message': msg
+            }
 
-        character_name_snapshot = luckiest_roll.character.character_name
-        group_name_snapshot = luckiest_roll.group.group_name
-        luck_index = luckiest_roll.luck_index
+        luckiest_roller_stats = daily_luck_averages.first()
+        winning_character = Character.objects.get(id=luckiest_roller_stats['character'])
+
+        character_name_snapshot = luckiest_roller_stats['character__character_name']
+        group_name_snapshot = luckiest_roller_stats['group__group_name']
+        luck_index = luckiest_roller_stats['avg_luck']
+
+        roll_count = Roll.objects.filter(
+            rolled_at__date=today,
+            character=winning_character
+        ).count()
 
         DailyLuckRecord.objects.update_or_create(
             date=today,
             defaults={
-                'character': luckiest_roll.character,
+                'character': winning_character,
                 'luck_index': luck_index,
                 'character_name_snapshot': character_name_snapshot,
                 'group_name_snapshot': group_name_snapshot,
-                'total_rolls_parsed': 1,
+                'total_rolls_parsed': roll_count,
             }
         )
 
-        msg = f"TASK: Daily Luck Record updated for {today}. Winner: {character_name_snapshot}"
+        msg = f"TASK: Daily Luck Record updated for {today}. Winner: {character_name_snapshot} (Avg Luck: {luck_index:.5f})"
         logger.info(msg)
+
         return {
-            "status": "success",
-            "date": str(today),
-            "winner": character_name_snapshot,
-            "luck_index": luck_index
+            'status': 'success',
+            'date': today.strftime('%Y-%m-%d'),
+            'winner': character_name_snapshot,
+            'luck_index': round(luck_index, 5),
+            'rolls': roll_count
         }
 
     except Exception as e:
@@ -146,7 +188,7 @@ def calculate_luckiest_roller_of_the_day():
 def delete_nameless_entities():
     """
     Deletes Characters and Groups that were created without a name ('Nameless' or empty).
-    Returns the count of deleted entities.
+    Returns a status message suitable for result backend verification.
     """
     logger.info("TASK: Starting delete_nameless_entities...")
 
@@ -164,11 +206,8 @@ def delete_nameless_entities():
 
     total_deleted = chars_deleted + groups_deleted
 
-    if total_deleted > 0:
-        msg = f"TASK: Finished delete_nameless_entities. Total entities (Characters/Groups) deleted: {total_deleted}"
-        logger.info(msg)
-        return total_deleted
-    else:
-        msg = "TASK: Finished delete_nameless_entities. (No entities deleted in placeholder logic)."
-        logger.info(msg)
-        return msg
+    msg = f"TASK: Nameless entities cleanup complete. Total deleted: {total_deleted}"
+    return {
+        'status': 'success',
+        'message': msg
+    }

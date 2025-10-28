@@ -222,32 +222,21 @@ class RollSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """
-        Validates the incoming data. Checks character ownership and validates the dice formula.
-        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
+        Validates the character and group belong to the current user.
         """
-        request = self.context.get('request')
+        user = self.context['request'].user
+        character = attrs.get('character')
+        group = attrs.get('group')
 
-        character_instance = attrs.get('character')
-        input_formula = attrs.get('roll_input')
+        if character and character.owner != user:
+            raise PermissionDenied("Character does not belong to the current user.")
 
-        if hasattr(character_instance, 'user') and \
-           character_instance.user != request.user:
-            raise PermissionDenied(
-                "The selected character does not belong to the authenticated user."
-            )
+        if group:
+            if group.owner != user:
+                raise PermissionDenied("Group does not belong to the current user.")
 
-        try:
-            roll_results = DiceRoller.calculate_roll(input_formula)
-        except InvalidRollFormula as e:
-            err_msg = f"Invalid roll formula or calculation error: {e}"
-            raise serializers.ValidationError({"roll_input": err_msg})
-        except Exception as e:
-            err_msg = f"An unexpected calculation error occurred: {e}"
-            raise serializers.ValidationError({"roll_input": err_msg})
-
-        attrs['roll_input'] = input_formula
-        attrs['roll_value'] = roll_results['final_result']
-        attrs['raw_dice_rolls'] = roll_results['roll_details']
+            if character and character.group and character.group != group:
+                raise ValidationError("Character must belong to the specified Group.")
 
         return attrs
 

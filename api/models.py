@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator
+import re
 
 from .utils import generate_key
 
@@ -141,9 +142,57 @@ class Roll(models.Model):
     group = models.ForeignKey('Group', on_delete=models.CASCADE)
     roll_input = models.CharField(max_length=512)
     roll_value = models.IntegerField()
+
     raw_dice_rolls = models.JSONField(default=dict)
     rolled_at = models.DateTimeField(default=timezone.now)
     luck_index = models.FloatField(null=True, blank=True)
+
+
+    def calculate_luck_index(self):
+        """
+        Calculates the Luck Index based on the raw dice roll total (self.roll_value).
+        Index = (Actual Dice Total - Expected Average Dice Total) / (Total Dice Range)
+
+        A positive index means a lucky roll relative to the average, and a negative index is unlucky.
+        """
+        roll_input = self.roll_input.lower().strip()
+
+        match = re.match(r'(\d+)[dD](\d+)', roll_input)
+
+        if not match:
+            self.luck_index = None
+            return
+
+        try:
+            num_dice = int(match.group(1))
+            sides = int(match.group(2))
+        except ValueError:
+            self.luck_index = None
+            return
+
+
+        expected_avg_roll = num_dice * (sides + 1) / 2
+
+        roll_range = num_dice * sides - num_dice
+
+        dice_roll_value = self.roll_value
+
+        if roll_range <= 0 or not isinstance(dice_roll_value, (int, float)):
+            self.luck_index = 0.0
+            return
+
+        self.luck_index = (dice_roll_value - expected_avg_roll) / roll_range
+
+
+    def save(self, *args, **kwargs):
+        """
+        Overrides the save method to ensure luck_index is calculated before saving.
+        """
+        if self._state.adding and self.luck_index is None:
+            self.calculate_luck_index()
+
+        super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"Roll {self.roll_value} for {self.character.character_name}"
