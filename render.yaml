@@ -1,16 +1,15 @@
 # Blueprint file for deploying Kobold Keeper API on Render.
 # This defines the five required services: Web, Worker, Beat, DB, and Redis.
 
-# --- 1. DATABASES (Must contain 'postgres' type) ---
+# --- 1. DATABASES ---
 databases:
   # 1. PostgreSQL Database (Stateful Service)
-  - type: postgresql
-    name: kobold-keeper-db
+  - name: kobold-keeper-db
     plan: free
     databaseName: koboldkeeper
     user: kobold
 
-# --- 2. SERVICES (Must contain 'web', 'worker', 'redis' types) ---
+# --- 2. SERVICES ---
 services:
   # 2. Redis Cache and Celery Broker
   - type: redis
