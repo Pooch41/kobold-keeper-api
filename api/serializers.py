@@ -281,7 +281,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class PasswordResetWithKeySerializer(serializers.Serializer):
     """
-    Handles password reset using a one-time recovery key (used when the user is not logged in).
+    Handles password reset using a recovery key (used when the user is not logged in).
     """
     username = serializers.CharField(required=True)
     recovery_key = serializers.CharField(required=True, write_only=True)
