@@ -1,0 +1,94 @@
+# Blueprint file for deploying Kobold Keeper API on Render.
+# This defines the five required services: Web, Worker, Beat, DB, and Redis.
+
+services:
+  # 1. PostgreSQL Database (Stateful Service)
+  - type: psql
+    name: kobold-keeper-db
+    plan: free # Use the free tier
+    databaseName: koboldkeeper
+    user: kobold
+
+  # 2. Redis Cache and Celery Broker
+  - type: redis
+    name: kobold-keeper-redis
+    plan: free # Use the free tier
+
+  # 3. Django Web Service (API)
+  - type: web
+    name: kobold-keeper-api
+    env: docker
+    plan: free
+
+
+    startCommand: ./render_web_entrypoint.sh
+
+    healthCheckPath: /api/schema/
+
+
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kobold-keeper-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: kobold-keeper-redis
+          property: connectionString
+      - key: PORT
+        value: 10000
+
+      - key: SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "localhost,kobold-keeper-api.onrender.com" # Update with your Render URL
+
+  # 4. Celery Worker (Background Processor)
+  - type: worker
+    name: kobold-keeper-worker
+    env: docker
+    plan: free
+
+    # Executes the worker command, listening to both queues
+    startCommand: celery -A kobold_keeper worker -l INFO -Q default,maintenance_queue
+
+    # Uses the same DB/Redis connections as the API
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kobold-keeper-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: kobold-keeper-redis
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
+
+  # 5. Celery Beat (Scheduler/Cron)
+  - type: worker
+    name: kobold-keeper-beat
+    env: docker
+    plan: free
+
+    # Executes the beat scheduler
+    startCommand: celery -A kobold_keeper beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+    # Uses the same DB/Redis connections as the API
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kobold-keeper-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: kobold-keeper-redis
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
