@@ -4,7 +4,7 @@
 # --- 1. DATABASES (Must contain 'postgres' type) ---
 databases:
   # 1. PostgreSQL Database (Stateful Service)
-  - type: postgres
+  - type: postgresql
     name: kobold-keeper-db
     plan: free
     databaseName: koboldkeeper
