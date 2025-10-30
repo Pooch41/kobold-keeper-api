@@ -3,7 +3,7 @@
 
 services:
   # 1. PostgreSQL Database (Stateful Service)
-  - type: psql
+  - type: postgres
     name: kobold-keeper-db
     plan: free # Use the free tier
     databaseName: koboldkeeper
