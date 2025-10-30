@@ -36,3 +36,16 @@ RUN chown -R django:django /app && \
 
 # Switch to the non-root user
 USER django
+
+# Stage 3: Conditional Entrypoint Based on SERVICE_ROLE
+# This logic lets Render run different processes (web, worker, beat) using one image
+CMD if [ "$SERVICE_ROLE" = "worker" ]; then \
+        echo "Starting Celery Worker..." && \
+        celery -A kobold_keeper worker -l INFO -Q default,maintenance_queue; \
+    elif [ "$SERVICE_ROLE" = "beat" ]; then \
+        echo "Starting Celery Beat..." && \
+        celery -A kobold_keeper beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler; \
+    else \
+        echo "Starting Django Web Service..." && \
+        /usr/local/bin/render_web_entrypoint.sh; \
+    fi

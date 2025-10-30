@@ -1,9 +1,6 @@
 #!/bin/sh
-# Exit immediately if a command exits with a non-zero status.
-set -e
 
 # 1. Wait for database readiness using netcat (nc).
-# Fly.io recommends setting connection logic to retry, but this explicit wait is robust.
 echo "Waiting for PostgreSQL database at $DB_HOST:$DB_PORT..."
 while ! nc -z $DB_HOST $DB_PORT; do
   sleep 0.5
@@ -19,5 +16,5 @@ python manage.py collectstatic --no-input
 
 echo "Static files collected. Starting Gunicorn server..."
 
-# 4. Start the Gunicorn server.
-exec /usr/local/bin/gunicorn kobold_keeper.wsgi:application --bind 0.0.0.0:$PORT
+# 4. Start the Gunicorn server, binding to all interfaces on port 8000.
+exec /usr/local/bin/gunicorn kobold_keeper.wsgi:application --bind 0.0.0.0:8000
