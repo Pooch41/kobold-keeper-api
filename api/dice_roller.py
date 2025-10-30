@@ -1,3 +1,11 @@
+"""
+Core utility module for parsing dice formulas and executing the rolls.
+
+This module contains the DiceRoller class, which handles complex dice notation
+(like '3d6', '1d20+5', and drop/keep modifiers like '4d6kh3') and calculates the
+final result, along with detailed component breakdowns for analytical tracking.
+"""
+
 import random
 import re
 from typing import Dict, Any

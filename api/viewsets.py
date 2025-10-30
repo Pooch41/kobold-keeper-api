@@ -1,3 +1,11 @@
+"""
+DRF ViewSets for the Kobold Keeper API.
+
+This module defines the RESTful endpoints for the core models (Group, Character, Roll),
+enforcing security rules based on user ownership for all CRUD operations. It ensures
+that users can only create, view, or modify resources they own.
+"""
+
 from rest_framework import viewsets, permissions
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.mixins import CreateModelMixin

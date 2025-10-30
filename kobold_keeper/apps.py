@@ -1,3 +1,10 @@
+"""
+Application configuration for the Kobold Keeper project.
+
+This file is primarily used to configure and register the project's
+internal components and metadata with the Django framework.
+"""
+
 from django.apps import AppConfig
 
 

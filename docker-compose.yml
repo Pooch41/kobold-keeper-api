@@ -1,4 +1,8 @@
+# Define the version of the Docker Compose file format
+version: '3.8'
+
 services:
+  # PostgreSQL Database Service
   db:
     image: postgres:16-alpine
     container_name: postgres_db
@@ -12,17 +16,19 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    # Healthcheck ensures the API container doesn't start until the DB is ready
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # Redis Cache and Message Broker Service for Celery
   redis:
     image: redis:7-alpine
     container_name: redis_cache
     expose:
-      - 6379
+      - 6379 # Expose port internally to link with Celery
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 1s
@@ -30,16 +36,45 @@ services:
       retries: 5
       start_period: 2s
 
+  # Main Django API Server (Gunicorn)
   api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: kobold_keeper_api
+    # start.sh runs migrations, collects static files, then starts Gunicorn
     command: /usr/local/bin/start.sh
     volumes:
       - .:/app
     ports:
-      - "${APP_PORT}:8000"
+      - "${APP_PORT}:8000" # Map configured host port to container port 8000
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: ${DEBUG}
+    depends_on:
+      # Wait until the PostgreSQL database is healthy before starting
+      db:
+        condition: service_healthy
+      # Wait until Redis has started
+      redis:
+        condition: service_started
+    restart: always
+
+  # Celery Worker Service for executing long-running tasks asynchronously
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobold_keeper_worker
+    # Command to start the Celery worker process
+    command: celery -A kobold_keeper worker -l info
+    volumes:
+      - .:/app
     env_file:
       - .env
     environment:
@@ -52,38 +87,17 @@ services:
       db:
         condition: service_healthy
       redis:
-        condition: service_started
-    restart: always
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: kobold_keeper_worker
-    command: celery -A kobold_keeper worker -l info
-    volumes:
-      - .:/app
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTES_DB}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY}
-      DEBUG: ${DEBUG}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     restart: always
 
 
+  # Celery Beat Service for scheduling periodic tasks
   beat:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: kobold_keeper_beat
+    # Command to start the Celery Beat scheduler
     command: celery -A kobold_keeper beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
     volumes:
       - .:/app
@@ -102,5 +116,6 @@ services:
         condition: service_healthy
     restart: always
 
+# Define the volume for persistent PostgreSQL data storage
 volumes:
   postgres_data:

@@ -1,3 +1,11 @@
+"""
+Pytest configuration file for setting up the Django environment.
+
+This module initializes Django settings and the application context
+before tests run, ensuring that models and configuration are correctly
+loaded for database and logic testing.
+"""
+
 import os
 import sys
 from pathlib import Path

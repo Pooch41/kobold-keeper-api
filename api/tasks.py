@@ -1,8 +1,17 @@
+"""
+Celery Task Definitions for Kobold Keeper.
+
+This module contains periodic and on-demand background tasks for calculating
+luck analytics, updating performance records, and performing database cleanup.
+"""
+
 import logging
+
 from celery import shared_task
 from django.db import transaction
-from django.db.models import Avg, Min, Max, F, Count
+from django.db.models import Avg, Min, Max
 from django.utils import timezone
+
 from .models import Roll, Group, GroupPerformanceRecord, DailyLuckRecord, Character
 
 logger = logging.getLogger(__name__)
@@ -42,64 +51,55 @@ def update_all_group_performance_records():
                 luck_index__isnull=False
             )
             total_rolls = eligible_rolls.count()
-
-
-            average_luck_index = 0.0
-            luckiest_player_name = "N/A"
-            luckiest_player_score = 0.0
-            least_lucky_player_name = "N/A"
-            least_lucky_player_score = 0.0
-            lowest_roll = None
-            highest_roll = None
-
             current_time = timezone.now()
 
+            defaults = {
+                'average_luck_index': 0.0,
+                'total_rolls': total_rolls,
+                'lowest_roll': None,
+                'highest_roll': None,
+                'luckiest_player_name': "N/A",
+                'luckiest_player_score': 0.0,
+                'least_lucky_player_name': "N/A",
+                'least_lucky_player_score': 0.0,
+                'last_updated': current_time,
+            }
+
             if total_rolls == 0:
-                logger.info(f"TASK: Group '{group.group_name}' has 0 eligible rolls today. Skipping.")
+                logger.info("TASK: Group '%s' has 0 eligible rolls today. Skipping.", group.group_name)
                 continue
-            else:
-                stats_results = eligible_rolls.aggregate(
-                    Avg('luck_index'),
-                    Min('roll_value'),
-                    Max('roll_value')
-                )
 
-                average_luck_index = stats_results.get('luck_index__avg') or 0.0
-                lowest_roll = stats_results.get('roll_value__min')
-                highest_roll = stats_results.get('roll_value__max')
+            stats_results = eligible_rolls.aggregate(
+                Avg('luck_index'),
+                Min('roll_value'),
+                Max('roll_value')
+            )
 
-                player_luck_stats = eligible_rolls.values(
-                    'character__character_name'
-                ).annotate(
-                    avg_luck=Avg('luck_index')
-                ).order_by('-avg_luck')
+            defaults['average_luck_index'] = stats_results.get('luck_index__avg') or 0.0
+            defaults['lowest_roll'] = stats_results.get('roll_value__min')
+            defaults['highest_roll'] = stats_results.get('roll_value__max')
 
-                if player_luck_stats.exists():
-                    luckiest = player_luck_stats.first()
-                    least_lucky = player_luck_stats.last()
+            player_luck_stats = eligible_rolls.values(
+                'character__character_name'
+            ).annotate(
+                avg_luck=Avg('luck_index')
+            ).order_by('-avg_luck')
 
-                    luckiest_player_name = luckiest['character__character_name']
-                    luckiest_player_score = luckiest['avg_luck']
+            if player_luck_stats.exists():
+                luckiest = player_luck_stats.first()
+                least_lucky = player_luck_stats.last()
 
-                    least_lucky_player_name = least_lucky['character__character_name']
-                    least_lucky_player_score = least_lucky['avg_luck']
+                defaults['luckiest_player_name'] = luckiest['character__character_name']
+                defaults['luckiest_player_score'] = luckiest['avg_luck']
 
+                defaults['least_lucky_player_name'] = least_lucky['character__character_name']
+                defaults['least_lucky_player_score'] = least_lucky['avg_luck']
 
             GroupPerformanceRecord.objects.update_or_create(
                 group=group,
-                defaults={
-                    'average_luck_index': average_luck_index,
-                    'total_rolls': total_rolls,
-                    'lowest_roll': lowest_roll,
-                    'highest_roll': highest_roll,
-                    'luckiest_player_name': luckiest_player_name,
-                    'luckiest_player_score': luckiest_player_score,
-                    'least_lucky_player_name': least_lucky_player_name,
-                    'least_lucky_player_score': least_lucky_player_score,
-                    'last_updated': current_time,
-                }
+                defaults=defaults
             )
-            logger.info(f"TASK: Updated Group Performance Record for '{group.group_name}' (Rolls: {total_rolls})")
+            logger.info("TASK: Updated Group Performance Record for '%s' (Rolls: %s)", group.group_name, total_rolls)
 
         msg = "TASK: Successfully processed all groups for performance records."
         logger.info(msg)
@@ -108,7 +108,7 @@ def update_all_group_performance_records():
             'message': msg
         }
 
-    except Exception as e:
+    except Exception:
         logger.error("FATAL ERROR during update_all_group_performance_records.", exc_info=True)
         raise
 
@@ -119,11 +119,11 @@ def calculate_luckiest_roller_of_the_day():
     """
     Finds the roller with the highest AVERAGE luck index across ALL rolls for the current day
     and records the winner in DailyLuckRecord.
-    The task now returns a structured dictionary for robust test verification.
+    Returns a structured dictionary for robust test verification.
     """
     try:
         today = timezone.localdate()
-        logger.info(f"TASK: Starting calculate_luckiest_roller_of_the_day for {today}...")
+        logger.info("TASK: Starting calculate_luckiest_roller_of_the_day for %s...", today)
 
         daily_luck_averages = Roll.objects.filter(
             rolled_at__date=today,
@@ -178,7 +178,7 @@ def calculate_luckiest_roller_of_the_day():
             'rolls': roll_count
         }
 
-    except Exception as e:
+    except Exception:
         logger.error("FATAL ERROR during calculate_luckiest_roller_of_the_day.", exc_info=True)
         raise
 
@@ -187,22 +187,18 @@ def calculate_luckiest_roller_of_the_day():
 @transaction.atomic
 def delete_nameless_entities():
     """
-    Deletes Characters and Groups that were created without a name ('Nameless' or empty).
+    Deletes Groups that were created without a name (empty string).
     Returns a status message suitable for result backend verification.
     """
     logger.info("TASK: Starting delete_nameless_entities...")
 
-    nameless_char_query = Character.objects.filter(
-        character_name="Nameless"
-    )
-    chars_deleted, _ = nameless_char_query.delete()
-    logger.info(f"TASK: Deleted {chars_deleted} Characters named 'Nameless'.")
+    chars_deleted = 0
 
     nameless_group_query = Group.objects.filter(
         group_name=""
     )
     groups_deleted, _ = nameless_group_query.delete()
-    logger.info(f"TASK: Deleted {groups_deleted} Groups with an empty name.")
+    logger.info("TASK: Deleted %d Groups with an empty name.", groups_deleted)
 
     total_deleted = chars_deleted + groups_deleted
 

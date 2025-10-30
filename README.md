@@ -23,7 +23,7 @@ This project is built with Python and Django Rest Framework (DRF), offering a ro
 
 ## ⚔️ Getting Started
 
-To run Kobold Keeper locally for development or as a self-hosted instance, you'll need **Docker** and **Docker Compose**. This setup ensures all dependencies (PostgreSQL database, Redis cache, Celery worker) are managed easily.
+To run Kobold Keeper locally for development or as a self-hosted instance, you'll need **Docker** and **Docker Compose**. This setup ensures all dependencies (**PostgreSQL** database, **Redis** cache, **Celery worker**, and **Celery Beat scheduler**) are managed easily.
 
 ### Prerequisites
 
@@ -33,7 +33,7 @@ To run Kobold Keeper locally for development or as a self-hosted instance, you'l
 ### 1. Clone the Repository
 
 ```bash
-git clone [https://github.com/Pooch41/kobold-keeper-api.git](https://github.com/Pooch41/kobold-keeper-api.git)
+git clone https://github.com/Pooch41/kobold-keeper-api.git
 cd kobold-keeper-api
 ```
 
@@ -46,23 +46,49 @@ cp Example.env .env
 # Edit .env to set secure keys, database credentials, and any external service tokens.
 ```
 
-### 3. Build and Run Services
+### 3. Build and Run Services (Recommended)
 
-Execute the following command to build the Docker images and start all required services (API, PostgreSQL, Redis, Celery):
+Execute the following command to build the Docker images and start all five required services (`api`, `worker`, `beat`, `db`, `redis`) in detached mode:
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-The API will be available @ http://localhost:8000.
+**Note:** The `start.sh` script inside the `api` container automatically handles waiting for the database, running `migrate`, and running `collectstatic` on startup.
 
-### 4. Apply Migrations
+The API will be available @ `http://localhost:8000`.
 
-Once the services are running, apply the database migrations to set up your tables:
+**API Schema (Swagger UI):** `http://localhost:8000/api/schema/swagger-ui/`
 
+### 4. Access the API
+
+Once the services are running and healthy (this may take a few seconds), the API will be available at:
+
+**API Root:** `http://localhost:8000/api/`.
+
+**API Schema (Swagger UI):** `http://localhost:8000/api/schema/swagger-ui/`
+
+
+## 🧙‍♂️ Testing
+The project uses **Pytest** for unit and integration testing, configured via `pytest.ini`. All tests must be executed within the Docker environment to ensure connectivity to the database.
+
+### Running Pytest
+Use `docker compose run --rm api pytest` to execute the tests inside a temporary container.
+
+
+## ⚙️ Celery Workers & Scheduled Tasks
+
+The application uses Celery for background processing.
+
+* **Worker:** The `worker` service executes tasks asynchronously (e.g., large-scale data computations).
+
+* **Beat:** The `beat` service is the scheduler that polls the database for periodic tasks defined in `django_celery_beat` and queues them for the worker.
+
+To monitor the activity of the workers and beat scheduler:
+
+### View all logs in real-time
 ```bash
-docker compose exec api python manage.py migrate
+docker compose logs -f
 ```
-
 ## 🛠️ Project Structure
 
 This project follows a standard Django structure with clearly defined application responsibilities:
@@ -70,10 +96,9 @@ This project follows a standard Django structure with clearly defined applicatio
 | Directory | Description |
 | :--- | :--- |
 | `api/` | Main application logic for Django REST Framework views, serializers, and permissions, including business logic related to dice rolling and authentication. |
-| `kobold_keeper/` | Core Django settings, URLs, and root configuration for the entire project. |
+| `kobold_keeper/` | Core Django settings, URLs, and root configuration for the entire project, **including Celery setup**. |
 | `docs/` | **Future home for dedicated documentation (e.g., `API_REFERENCE.md`).** |
-| `docker-compose.yml` | Defines the multi-container environment (API, DB, Cache, Worker). |
-
+| `docker-compose.yml` | Defines the multi-container environment (API, DB, Cache, Worker, Beat). |
 ---
 
 ## 🤝 Contribution
@@ -86,11 +111,10 @@ We welcome contributions! As an open-source project, your help is invaluable for
 4.  Create a new **Pull Request** to the **main development branch**.
 
 ### ❗Code Quality Standards
-
-We enforce strict quality checks using **Pylint**. Before submitting a pull request, please ensure your changes pass the quality checks:
+We enforce strict quality checks using **Pylint**. As configured in `pyproject.toml`. Before submitting a pull request, please ensure your changes pass the quality checks:
 
 ```bash
-docker compose run --rm api pylint api kobold_keeper
+docker compose run --rm api pylint kobold_keeper api
 ```
 
 ## 📜 License

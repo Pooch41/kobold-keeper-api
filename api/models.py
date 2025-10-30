@@ -1,10 +1,20 @@
+"""
+Database models for the Kobold Keeper application.
+
+This module defines the core data structures for users, campaigns (Groups),
+player characters (Characters), and the transactional history of dice rolls (Roll).
+It also includes utility models for long-term analytics and recovery (RecoveryKey,
+DailyLuckRecord, GroupPerformanceRecord).
+"""
+
+import re
+
 from django.conf import settings
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
-from django.core.validators import MinValueValidator
-import re
 
 from .utils import generate_key
 
@@ -147,7 +157,6 @@ class Roll(models.Model):
     rolled_at = models.DateTimeField(default=timezone.now)
     luck_index = models.FloatField(null=True, blank=True)
 
-
     def calculate_luck_index(self):
         """
         Calculates the Luck Index based on the raw dice roll total (self.roll_value).
@@ -170,7 +179,6 @@ class Roll(models.Model):
             self.luck_index = None
             return
 
-
         expected_avg_roll = num_dice * (sides + 1) / 2
 
         roll_range = num_dice * sides - num_dice
@@ -183,7 +191,6 @@ class Roll(models.Model):
 
         self.luck_index = (dice_roll_value - expected_avg_roll) / roll_range
 
-
     def save(self, *args, **kwargs):
         """
         Overrides the save method to ensure luck_index is calculated before saving.
@@ -193,16 +200,16 @@ class Roll(models.Model):
 
         super().save(*args, **kwargs)
 
-
     def __str__(self):
         return f"Roll {self.roll_value} for {self.character.character_name}"
+
 
 class DailyLuckRecord(models.Model):
     """
     Stores the daily record of the 'luckiest' character based on the
     average roll vs. theoretical average (Luck Index).
     """
-    date = models.DateField(unique = True,)
+    date = models.DateField(unique=True, )
     character = models.ForeignKey('Character', on_delete=models.PROTECT)
     character_name_snapshot = models.CharField(max_length=255)
     group_name_snapshot = models.CharField(max_length=255)
@@ -212,6 +219,7 @@ class DailyLuckRecord(models.Model):
 
     def __str__(self):
         return f"{self.date} - {self.character.character_name} (Index: {self.luck_index:.4f})"
+
 
 class GroupPerformanceRecord(models.Model):
     """
@@ -226,15 +234,13 @@ class GroupPerformanceRecord(models.Model):
     lowest_roll = models.IntegerField(null=True, blank=True)
     highest_roll = models.IntegerField(null=True, blank=True)
 
-
     luckiest_player_name = models.CharField(max_length=255, default="N/A")
     luckiest_player_score = models.FloatField(default=0.0)
 
     least_lucky_player_name = models.CharField(max_length=255, default="N/A")
     least_lucky_player_score = models.FloatField(default=0.0)
 
-
     last_updated = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Performance for {self.group.name} (Luck: {self.average_luck_index:.4f})"
+        return f"Performance for {self.group.group_name} (Luck: {self.average_luck_index:.4f})"

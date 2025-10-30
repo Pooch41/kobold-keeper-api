@@ -1,3 +1,13 @@
+"""
+URL Configuration for the API application.
+
+This module defines the main routes for the Kobold Keeper API, including:
+1. RESTful routes for Group, Character, and Roll models via DefaultRouter.
+2. Standard authentication routes (token, refresh, register).
+3. Custom analytical endpoints for calculating luck statistics.
+"""
+
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
