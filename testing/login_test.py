@@ -1,3 +1,17 @@
+"""
+Utility script to test JWT token acquisition from the Django API.
+
+This script attempts to log in using predefined credentials to the Djoser token
+endpoint (auth/token/). It verifies the following:
+1. Connection to the local Django server (http://localhost:8000).
+2. Successful authentication (HTTP 200) and receipt of 'access' and 'refresh' tokens.
+3. Proper error handling for connection issues (using exponential backoff).
+4. Proper error reporting for authentication failures (HTTP 401).
+
+Note: This script requires the Django server and the necessary user account
+(shell_test_user/MySecureNewPassword123) to be running and configured.
+"""
+
 import json
 import time
 

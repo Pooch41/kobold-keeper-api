@@ -1,3 +1,13 @@
+"""
+Unit tests for the DiceRoller utility class.
+
+This module uses the standard Python `unittest` framework to verify that
+the DiceRoller correctly parses and calculates various dice notation formats,
+including simple rolls, modifiers, and drop/keep logic (e.g., 4d6dl1, 5d8kh3).
+
+All tests use a fixed random seed (42) to ensure deterministic results.
+"""
+
 import random
 import re
 import unittest

@@ -1,3 +1,11 @@
+"""
+API Views for the Kobold Keeper application.
+
+This module contains the ViewSets (for CRUD operations on Groups, Characters, and Rolls)
+and the specific APIViews (for Luck Analytics) that serve the application's core logic.
+All views enforce object-level permissions to ensure users only access their own data.
+"""
+
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, NotFound, APIException
@@ -27,7 +35,7 @@ def _get_analytics_queryset_and_name(user: User, character_id: str = None, group
     user_owned_rolls = Roll.objects.filter(character__owner=user)
 
     if character_id:
-        character = get_object_or_404(Character.objects.filter(owner=user), pk=character_id)
+        character = get_object_or_404(Character.objects.filter(user=user), pk=character_id)
         queryset = user_owned_rolls.filter(character=character)
         scope = f"Character: {character.character_name}"
     elif group_id:
@@ -75,13 +83,13 @@ class CharacterViewSet(ModelViewSet):
         """
         Ensures users can only view and manage Characters they own.
         """
-        return Character.objects.filter(owner=self.request.user).order_by('character_name')
+        return Character.objects.filter(user=self.request.user).order_by('character_name')
 
     def perform_create(self, serializer):
         """
-        Injects the current authenticated user as the `owner` during creation.
+        Injects the current authenticated user as the `user` during creation.
         """
-        serializer.save(owner=self.request.user)
+        serializer.save(user=self.request.user)
 
 
 class RollViewSet(ModelViewSet):
@@ -100,7 +108,7 @@ class RollViewSet(ModelViewSet):
         This fetches the character and group data in one query for serialization.
         """
         return Roll.objects.filter(
-            character__owner=self.request.user
+            character__user=self.request.user
         ).select_related('character', 'group').order_by('-rolled_at')
 
     def perform_create(self, serializer):
@@ -109,7 +117,7 @@ class RollViewSet(ModelViewSet):
         ensures the character belongs to the user.
         """
         character = serializer.validated_data['character']
-        if character.owner != self.request.user:
+        if character.user != self.request.user:
             raise PermissionDenied("You can only create rolls for your own characters.")
 
         serializer.save()
@@ -148,7 +156,7 @@ class LuckAnalyticsView(APIView):
             }, status=status.HTTP_200_OK)
 
         analytics_service = LuckAnalyticsService(roll_queryset)
-        stats = analytics_service.get_general_statistics()
+        stats = analytics_service.get_modified_roll_metrics()
 
         return Response({
             "scope": scope,
@@ -173,7 +181,6 @@ class LuckiestRollerView(APIView):
         group_id = request.query_params.get('group_id')
 
         try:
-            # Uses the BOLA-safe helper function
             roll_queryset, scope = _get_analytics_queryset_and_name(
                 user, character_id, group_id
             )

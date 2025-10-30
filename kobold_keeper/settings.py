@@ -196,11 +196,9 @@ CELERY_RESULT_SERIALIZER = 'json'
 
 CELERY_TIMEZONE = 'UTC'
 
-
 CELERY_TASK_QUEUES = [
     ('maintenance_queue', {'exchange': 'maintenance_queue', 'routing_key': 'maintenance.tasks'}),
 ]
-
 
 CELERY_BEAT_SCHEDULE = {
     'calculate-group-performance-hourly': {

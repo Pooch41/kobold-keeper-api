@@ -1,3 +1,17 @@
+"""
+Utility script to test the Django API's custom password reset functionality.
+
+This script targets a specific password reset endpoint that requires a username,
+a predefined recovery key, and a new password. It performs the following checks:
+1. Confirms connection to the local Django server (http://localhost:8000).
+2. Executes a POST request to the password reset endpoint (/api/auth/password/reset/).
+3. Handles transient connection failures using exponential backoff.
+4. Reports success (HTTP 200) or validation errors (HTTP 400).
+
+Note: This script assumes the Django server is running and the authentication
+system is configured to handle the recovery key parameter for password resets.
+"""
+
 import json
 import time
 

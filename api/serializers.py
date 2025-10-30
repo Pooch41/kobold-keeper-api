@@ -1,3 +1,13 @@
+"""
+API Serializers for Kobold Keeper.
+
+This module defines serializers for all core models (User, Group, Character, Roll)
+and includes specialized serializers for authentication (JWT), password recovery,
+and performance analytics. It handles validation, nested data representation,
+and ensures transactional integrity for user registration and related flows.
+"""
+
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password
@@ -11,7 +21,6 @@ from rest_framework.exceptions import (
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .dice_roller import DiceRoller, InvalidRollFormula
 from .models import User, Group, Character, Roll, RecoveryKey, GroupPerformanceRecord
 from .utils import generate_key
 
@@ -83,17 +92,6 @@ class GroupSerializer(serializers.ModelSerializer):
 
         except ObjectDoesNotExist:
             return None
-        except Exception as e:
-            print(f"Error retrieving performance record for group {obj.id}: {e}")
-            return None
-
-    def create(self, validated_data):
-        return Group.objects.create(**validated_data)
-
-    def update(self, instance, validated_data):
-        instance.group_name = validated_data.get('group_name', instance.group_name)
-        instance.save()
-        return instance
 
     def create(self, validated_data):
         return Group.objects.create(**validated_data)
@@ -227,8 +225,7 @@ class RollSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         character = attrs.get('character')
         group = attrs.get('group')
-
-        if character and character.owner != user:
+        if character and character.user != user:
             raise PermissionDenied("Character does not belong to the current user.")
 
         if group:

@@ -1,17 +1,18 @@
+# Centralized configuration for Python tools (Pylint, build systems, etc.).
+
 [tool.pylint]
 
-
 [tool.pylint.main]
-
+# Load Django-specific and utility extensions.
 load-plugins = [
     "pylint_django",
     "pylint.extensions.no_self_use",
 ]
 
-
+# Allow Django ORM managers.
 generated-members = ["objects"]
 
-
+# Ignore directories that don't need analysis.
 ignore-paths = [
     "migrations",
     "static",
@@ -20,6 +21,7 @@ ignore-paths = [
     ".git",
 ]
 
+# Point Pylint to the Django settings file.
 django-settings-module = "kobold_keeper.settings"
 
 
@@ -28,22 +30,24 @@ max-line-length = 100
 
 
 [tool.pylint.reports]
+# Require a minimum score for CI/build success.
 fail-under = 9.0
 reports = "yes"
 
 
 [tool.pylint.messages-control]
+# Disable specific checks that conflict with Django conventions or project style.
 disable = [
-    "invalid-name",
+    "invalid-name",                # Allows common Django names (e.g., camelCase for signals/tasks).
     "redefined-builtin",
-    "no-self-use",
-    "unused-argument",
-    "too-few-public-methods",
-    "missing-module-docstring",
+    "no-self-use",                 # Allows utility methods on classes.
+    "unused-argument",             # Common in Django hook/signal functions.
+    "too-few-public-methods",      # Allows simple viewsets/serializers.
+    "missing-module-docstring",    # Reduces boilerplate.
     "missing-class-docstring",
     "missing-function-docstring",
     "ungrouped-imports",
-    "attribute-defined-outside-init",
-    "C0301",
-    "R0901",
+    "attribute-defined-outside-init", # Common Django model pattern.
+    "C0301",                       # Duplicate of max-line-length check.
+    "R0901",                       # Allows deep inheritance/mixins.
 ]

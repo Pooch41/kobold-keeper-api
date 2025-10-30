@@ -1,3 +1,13 @@
+"""
+Tests for the Luck Analytics Service and related Query Filters.
+
+This module validates the core business logic of the application:
+1. RollQueryFilter: Ensures data retrieval is correctly scoped (global, character, group).
+2. LuckAnalyticsService: Verifies accurate calculation of complex statistics like
+   raw dice averages, modified roll metrics (min/max/avg), die type analysis,
+   and character luck deltas/ratios.
+"""
+
 import json
 from datetime import timedelta
 

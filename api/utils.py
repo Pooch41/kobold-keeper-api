@@ -1,3 +1,10 @@
+"""
+Utility functions for the API application.
+
+This module provides common helpers, such as the cryptographic key generation
+function used for features like password recovery.
+"""
+
 import random
 import string
 

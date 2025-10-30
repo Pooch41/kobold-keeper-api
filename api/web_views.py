@@ -1,3 +1,10 @@
+"""
+Django views for rendering static web pages and documentation templates.
+
+These views use TemplateView to serve pre-rendered HTML files for the main
+user-facing pages, separating the front-end rendering from the API logic.
+"""
+
 from django.views.generic import TemplateView
 
 
