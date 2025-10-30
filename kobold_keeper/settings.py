@@ -16,8 +16,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-import celery_config
-
 load_dotenv()
 secret_key = os.getenv('SECRET_KEY')
 
@@ -189,8 +187,37 @@ SPECTACULAR_SETTINGS = {
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-CELERY_BEAT_SCHEDULE = celery_config.CELERY_BEAT_SCHEDULE
-CELERY_TASK_QUEUES = celery_config.CELERY_TASK_QUEUES
+CELERY_BROKER_URL = 'redis://redis:6379/0'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
 
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
 
 CELERY_TIMEZONE = 'UTC'
+
+
+CELERY_TASK_QUEUES = [
+    ('maintenance_queue', {'exchange': 'maintenance_queue', 'routing_key': 'maintenance.tasks'}),
+]
+
+
+CELERY_BEAT_SCHEDULE = {
+    'calculate-group-performance-hourly': {
+        'task': 'api.tasks.update_all_group_performance_records',
+        'schedule': timedelta(hours=3),
+        'args': (),
+        'options': {'queue': 'default'},
+        'name': 'Update all group performance records hourly',
+    },
+
+    'cleanup-nameless-entities-daily': {
+        'task': 'api.tasks.delete_nameless_entities',
+        'schedule': timedelta(days=1),
+        'options': {'queue': 'maintenance_queue'},
+        'name': 'Daily cleanup of nameless characters and groups',
+    },
+}
+
+CELERY_BEAT_SCHEDULE = {}
+CELERY_TASK_QUEUES = []

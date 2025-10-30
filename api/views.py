@@ -115,7 +115,7 @@ class RollViewSet(ModelViewSet):
         serializer.save()
 
 
-class AnalyticsView(APIView):
+class LuckAnalyticsView(APIView):
     """
     API endpoint for retrieving general roll statistics (min, max, average)
     for a given scope (user, character, or group).

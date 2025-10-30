@@ -3,15 +3,16 @@ Celery worker application configuration for the Kobold Keeper project.
 """
 
 import os
-
 from celery import Celery
+import django
+from django.apps import apps
+from celery.signals import setup_logging
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'kobold_keeper.settings')
-import django
 django.setup()
 app = Celery('kobold_keeper')
 app.config_from_object('django.conf:settings', namespace='CELERY')
-app.autodiscover_tasks(['api'])
+app.autodiscover_tasks(lambda: [n.name for n in apps.get_app_configs()])
 
 
 @app.task(bind=True)
@@ -21,3 +22,12 @@ def debug_task(self):
     It prints the current request information.
     """
     print(f'Request: {self.request!r}')
+
+@setup_logging.connect
+def config_loggers(*args, **kwargs):
+    from logging.config import dictConfig
+    from django.conf import settings
+    dictConfig(settings.LOGGING)
+
+if __name__ == '__main__':
+    app.start()
