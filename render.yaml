@@ -4,9 +4,9 @@
 # --- 1. DATABASES (Must contain 'postgres' type) ---
 databases:
   # 1. PostgreSQL Database (Stateful Service)
-  - type: postgres # Now correctly placed under 'databases'
+  - type: postgres
     name: kobold-keeper-db
-    plan: free # Use the free tier
+    plan: free
     databaseName: koboldkeeper
     user: kobold
 
@@ -15,7 +15,7 @@ services:
   # 2. Redis Cache and Celery Broker
   - type: redis
     name: kobold-keeper-redis
-    plan: free # Use the free tier
+    plan: free
 
   # 3. Django Web Service (API)
   - type: web
@@ -23,6 +23,7 @@ services:
     env: docker
     plan: free
 
+    # Executes the web server entrypoint
     startCommand: ./render_web_entrypoint.sh
 
     healthCheckPath: /api/schema/
