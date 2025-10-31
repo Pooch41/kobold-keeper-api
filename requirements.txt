@@ -40,4 +40,5 @@ pylint
 pylint-django
 
 #DRF Spectacular
-drf-spectacular
+drf-spectacular~=0.28.0
+kombu~=5.5.4

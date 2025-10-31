@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from kombu import Queue, Exchange
 
 from dotenv import load_dotenv
 
@@ -31,11 +32,12 @@ SECRET_KEY = secret_key
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
 # Application definition
 
 INSTALLED_APPS = [
+    'api.apps.ApiConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -46,9 +48,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'drf_spectacular',
     'django_celery_beat',
-
     'kobold_keeper.apps.KoboldKeeperConfig',
-    'api'
 ]
 
 MIDDLEWARE = [
@@ -168,15 +168,6 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CELERY_BROKER_URL = 'redis://redis:6379/0'
-CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
-
-CELERY_ACCEPT_CONTENT = ['json']
-
-CELERY_TASK_SERIALIZER = 'json'
-
-CELERY_RESULT_SERIALIZER = 'json'
-
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Kobold Keeper API',
     'DESCRIPTION': 'API documentation for Kobold Keeper.',
@@ -196,9 +187,10 @@ CELERY_RESULT_SERIALIZER = 'json'
 
 CELERY_TIMEZONE = 'UTC'
 
-CELERY_TASK_QUEUES = [
-    ('maintenance_queue', {'exchange': 'maintenance_queue', 'routing_key': 'maintenance.tasks'}),
-]
+CELERY_TASK_QUEUES = (
+    Queue('default', Exchange('default'), routing_key='default'),
+    Queue('maintenance_queue', Exchange('maintenance_queue'), routing_key='maintenance.tasks'),
+)
 
 CELERY_BEAT_SCHEDULE = {
     'calculate-group-performance-hourly': {
@@ -216,6 +208,3 @@ CELERY_BEAT_SCHEDULE = {
         'name': 'Daily cleanup of nameless characters and groups',
     },
 }
-
-CELERY_BEAT_SCHEDULE = {}
-CELERY_TASK_QUEUES = []

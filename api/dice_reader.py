@@ -6,52 +6,26 @@ This module provides filtering capabilities (RollQueryFilter) and the core
 analytics engine (LuckAnalyticsService) to derive metrics based on both the
 final modified roll value and the raw, unmodified dice components stored
 in the JSON field.
+
+Classes:
+    RollQueryFilter: Provides static methods to build optimized QuerySets
+                     for filtering Roll data (e.g., by character, by group).
+    LuckAnalyticsService: A service that consumes a Roll QuerySet and
+                          provides methods to calculate:
+                          - General modified roll statistics (min, max, avg).
+                          - Raw (unmodified) dice averages.
+                          - Luck indices (weighted) per die-type and overall.
+                          - Character-based luck rankings.
 """
+
 
 import json
 import re
-from json import JSONDecodeError
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 
-from django.db.models import Avg, Count, Max, Min, QuerySet
+from django.db.models import Avg, Count, Max, Min
 
 from .models import Roll
-
-
-def _extract_roll_metrics(roll: Roll, theoretical_averages: Dict[int, float], dice_pattern: re.Pattern) -> Tuple[
-    float, float, int]:
-    """Extracts raw sum, theoretical sum, and total dice count from a single Roll object."""
-    raw_dice_sum = 0.0
-    theoretical_sum = 0.0
-    total_dice_count = 0
-
-    raw_rolls_components = roll.raw_dice_rolls
-    if isinstance(raw_rolls_components, str):
-        try:
-            raw_rolls_components = json.loads(raw_rolls_components)
-        except JSONDecodeError:
-            return raw_dice_sum, theoretical_sum, total_dice_count
-
-    if not isinstance(raw_rolls_components, list):
-        return raw_dice_sum, theoretical_sum, total_dice_count
-
-    for component in raw_rolls_components:
-        if component.get('component_type') == 'dice':
-            formula = component.get('formula', '').lower()
-            rolls_list = component.get('rolls', [])
-
-            match = dice_pattern.search(formula)
-            if not match or not rolls_list:
-                continue
-
-            die_size = int(match.group(1))
-
-            raw_dice_sum += sum(rolls_list)
-            num_dice = len(rolls_list)
-            theoretical_sum += num_dice * theoretical_averages.get(die_size, 0.0)
-            total_dice_count += num_dice
-
-    return raw_dice_sum, theoretical_sum, total_dice_count
 
 
 class RollQueryFilter:
@@ -64,7 +38,7 @@ class RollQueryFilter:
     """
 
     @staticmethod
-    def for_character(character_id: Any) -> QuerySet[Roll]:
+    def for_character(character_id):
         """
         Returns a QuerySet of Rolls associated with a specific character.
 
@@ -74,10 +48,11 @@ class RollQueryFilter:
         """
         if not character_id:
             raise ValueError("Character object is required for character-specific rolls.")
+        # OPTIMIZATION: Use select_related to pre-fetch character data for the service
         return Roll.objects.filter(character__id=character_id).select_related('character', 'group')
 
     @staticmethod
-    def for_group(group_id: Any) -> QuerySet[Roll]:
+    def for_group(group_id):
         """
         Returns a QuerySet of Rolls associated with a specific group.
 
@@ -87,15 +62,17 @@ class RollQueryFilter:
         """
         if not group_id:
             raise ValueError("Group ID is required for group-specific rolls.")
+        # OPTIMIZATION: Use select_related to pre-fetch character data for the service
         return Roll.objects.filter(group__id=group_id).select_related('character', 'group')
 
     @staticmethod
-    def for_global() -> QuerySet[Roll]:
+    def for_global():
         """
         Returns a QuerySet containing all Roll objects (global scope).
 
         :return: QuerySet of all Roll objects.
         """
+        # OPTIMIZATION: Use select_related to pre-fetch character data for the service
         return Roll.objects.all().select_related('character', 'group')
 
 
@@ -108,13 +85,15 @@ class LuckAnalyticsService:
     complex Python-based JSON parsing (for raw dice rolls).
     """
 
+    # Dictionary mapping die size to its theoretical average value: (Max value + 1) / 2
     THEORETICAL_AVERAGES = {
         4: 2.5, 6: 3.5, 8: 4.5, 10: 5.5, 12: 6.5, 20: 10.5, 100: 50.5
     }
 
+    # Regex to extract the die size from a formula string (e.g., 'd20' from '2d20kh1+5')
     DICE_TYPE_PATTERN = re.compile(r'd(\d+)')
 
-    def __init__(self, roll_queryset: QuerySet[Roll]):
+    def __init__(self, roll_queryset):
         self.roll_queryset = roll_queryset
 
     def _get_all_dice_components(self) -> List[Dict[str, Any]]:
@@ -123,19 +102,23 @@ class LuckAnalyticsService:
         and flattens the result into a list of individual dice component dictionaries,
         filtering only for components where 'component_type' is 'dice'.
         """
+        all_rolls_data = self.roll_queryset.values_list('raw_dice_rolls', flat=True)
         all_dice_components = []
 
-        for roll_data in self.roll_queryset.values_list('raw_dice_rolls', flat=True):
+        for roll_data in all_rolls_data:
+            parsed_roll = None
+
             if roll_data is None:
                 continue
 
-            parsed_roll = roll_data
             if isinstance(roll_data, str):
                 try:
                     parsed_roll = json.loads(roll_data)
-                except JSONDecodeError as e:
+                except json.JSONDecodeError as e:
                     print(f"Error parsing raw_dice_rolls string: {e}")
                     continue
+            else:
+                parsed_roll = roll_data
 
             if isinstance(parsed_roll, list):
                 for component in parsed_roll:
@@ -149,7 +132,7 @@ class LuckAnalyticsService:
         Private helper that aggregates raw dice sums, theoretical sums, and roll counts
         for every character found in the current queryset.
 
-        R0914 Fix: Extracted complex parsing logic into a helper function to reduce locals.
+        This logic was extracted from the original get_luckiest_roller_by_delta method.
 
         :return: A dictionary keyed by character ID, holding raw aggregation totals.
         """
@@ -157,19 +140,45 @@ class LuckAnalyticsService:
 
         for roll in self.roll_queryset:
             char_id = roll.character_id
-            char_name = getattr(roll.character, 'character_name', 'Unknown Character')
+            char_name = roll.character.character_name if roll.character else 'Unknown Character'
 
             if not char_id or char_name == 'Unknown Character':
                 continue
 
+            raw_dice_sum = 0.0
+            theoretical_sum = 0.0
+            total_dice_count = 0
+
             try:
-                raw_dice_sum, theoretical_sum, total_dice_count = _extract_roll_metrics(
-                    roll,
-                    self.THEORETICAL_AVERAGES,
-                    self.DICE_TYPE_PATTERN
-                )
-            except (JSONDecodeError, ValueError, TypeError) as e:
-                print(f"Skipping roll {roll.id} due to data error: {e}")
+                raw_rolls_components = roll.raw_dice_rolls
+                if isinstance(raw_rolls_components, str):
+                    raw_rolls_components = json.loads(raw_rolls_components)
+
+                if not isinstance(raw_rolls_components, list):
+                    continue
+
+                for component in raw_rolls_components:
+                    if component.get('component_type') == 'dice':
+                        formula = component.get('formula', '').lower()
+                        rolls_list = component.get('rolls', [])
+
+                        match = self.DICE_TYPE_PATTERN.search(formula)
+                        if not match or not rolls_list:
+                            continue
+
+                        die_size = int(match.group(1))
+
+                        component_raw_sum = sum(rolls_list)
+                        raw_dice_sum += component_raw_sum
+
+                        num_dice = len(rolls_list)
+                        theoretical_avg = self.THEORETICAL_AVERAGES.get(die_size, 0.0)
+                        theoretical_sum += num_dice * theoretical_avg
+
+                        total_dice_count += num_dice
+
+            except (json.JSONDecodeError, Exception):
+                # Print to console for debugging, but continue processing rolls
                 continue
 
             if char_id not in character_metrics:
@@ -211,8 +220,7 @@ class LuckAnalyticsService:
 
         return {
             "total_rolls": aggregation['total_rolls'],
-            "avg_modified_roll": round(aggregation['avg_modified_roll'], 2) if aggregation[
-                                                                                   'avg_modified_roll'] is not None else None,
+            "avg_modified_roll": round(aggregation['avg_modified_roll'], 2),
             "min_modified_roll": aggregation['min_modified_roll'],
             "max_modified_roll": aggregation['max_modified_roll'],
         }
@@ -250,44 +258,45 @@ class LuckAnalyticsService:
         by parsing the 'formula' field using regex.
 
         It also calculates a per-die 'luck_index' (average / theoretical average).
-
-        R0914 Fix: Eliminated the local definition of DICE_TYPE_PATTERN and replaced the
-        sort_key helper function with a lambda to reduce local variable count below 15.
         """
         all_dice_components = self._get_all_dice_components()
 
         if not all_dice_components:
             return {}
 
+        DICE_TYPE_PATTERN = re.compile(r'd(\d+)')
         type_tracker = {}
 
         for component in all_dice_components:
-            match = self.DICE_TYPE_PATTERN.search(component.get('formula', ''))
-
-            if not match:
-                continue
-
-            d_type_str = match.group(1)
+            formula = component.get('formula', '')
             individual_rolls = component.get('rolls', [])
 
-            try:
-                d_type = int(d_type_str)
-            except ValueError:
-                continue
+            match = DICE_TYPE_PATTERN.search(formula)
 
-            if d_type not in type_tracker:
-                type_tracker[d_type] = {'sum': 0, 'count': 0}
+            if match and individual_rolls:
+                d_type_str = match.group(1)
 
-            type_tracker[d_type]['sum'] += sum(individual_rolls)
-            type_tracker[d_type]['count'] += len(individual_rolls)
+                try:
+                    d_type = int(d_type_str)
+                except ValueError:
+                    continue
+
+                if d_type not in type_tracker:
+                    type_tracker[d_type] = {'sum': 0, 'count': 0}
+
+                type_tracker[d_type]['sum'] += sum(individual_rolls)
+                type_tracker[d_type]['count'] += len(individual_rolls)
 
         results = {}
         for d_type, data in type_tracker.items():
+            die_label = f"d{d_type}"
             avg = data['sum'] / data['count'] if data['count'] > 0 else 0.0
+
             theoretical_avg = (d_type + 1) / 2
+
             luck_index = avg / theoretical_avg if theoretical_avg > 0 else 0.0
 
-            results[f"d{d_type}"] = {
+            results[die_label] = {
                 "average_roll": round(avg, 2),
                 "theoretical_average": round(theoretical_avg, 2),
                 "roll_count": data['count'],
@@ -295,10 +304,7 @@ class LuckAnalyticsService:
                 "luck_index": round(luck_index, 4)
             }
 
-        return dict(sorted(
-            results.items(),
-            key=lambda item: int(item[0][1:]) if item[0][1:].isdigit() else float('inf')
-        ))
+        return dict(sorted(results.items(), key=lambda item: int(item[0][1:])))
 
     def calculate_luck_index(self) -> Dict[str, Any]:
         """
@@ -325,7 +331,10 @@ class LuckAnalyticsService:
             total_weighted_luck_sum += (luck_index * roll_count)
             total_raw_dice_count += roll_count
 
-        overall_luck_index = total_weighted_luck_sum / total_raw_dice_count if total_raw_dice_count > 0 else 0.0
+        if total_raw_dice_count > 0:
+            overall_luck_index = total_weighted_luck_sum / total_raw_dice_count
+        else:
+            overall_luck_index = 0.0
 
         return {
             "luck_index": round(overall_luck_index, 4),
@@ -348,9 +357,13 @@ class LuckAnalyticsService:
             theoretical = metrics['total_theoretical_sum']
             total_dice = metrics['total_raw_dice_count']
 
-            luck_delta = actual - theoretical
+            if total_dice > 0:
+                luck_delta = actual - theoretical
 
-            luck_delta_ratio = luck_delta / theoretical if theoretical > 0 else 0.0
+                luck_delta_ratio = luck_delta / theoretical if theoretical > 0 else 0.0
+            else:
+                luck_delta = 0.0
+                luck_delta_ratio = 0.0
 
             results.append({
                 'character_id': char_id,
