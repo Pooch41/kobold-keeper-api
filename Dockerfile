@@ -12,9 +12,8 @@ WORKDIR /app
 COPY requirements.txt /app/
 
 # Stage 2: Dependencies, Installation, and Security
-# Install netcat (for waiting on DB in start.sh) and clean up apt cache
 RUN apt-get update && \
-    apt-get install -y netcat-openbsd --no-install-recommends && \
+    apt-get install -y --no-install-recommends && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -24,10 +23,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Create dedicated non-root user and group for security
 RUN groupadd -r django && useradd -r -g django django
 
-# Copy startup script and fix line endings (for Windows compatibility)
-COPY start.sh /usr/local/bin/start.sh
-RUN sed -i 's/\r$//' /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
+COPY render_web_entrypoint.sh /usr/local/bin/render_web_entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/render_web_entrypoint.sh && \
+    chmod +x /usr/local/bin/render_web_entrypoint.sh
 
 
 COPY . /app/
@@ -40,8 +38,8 @@ COPY ./api/dice_reader.py /app/api/dice_reader.py
 
 
 # Set file ownership for non-root user access
-RUN chown -R django:django /app
-RUN chown django:django /usr/local/bin/start.sh
+RUN chown -R django:django /app && \
+    chown django:django /usr/local/bin/render_web_entrypoint.sh
 
 # Switch to the non-root user
 USER django
