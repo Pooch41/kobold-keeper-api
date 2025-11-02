@@ -249,117 +249,18 @@ class RollSerializer(serializers.ModelSerializer):
         formula_string = validated_data.pop('roll_input')
 
         try:
+            # Use the DiceRoller you provided
             roll_data = DiceRoller.calculate_roll(formula_string)
 
         except InvalidRollFormula as e:
             raise serializers.ValidationError({"roll_input": str(e)})
 
+        # Add the calculated values
         validated_data['roll_value'] = roll_data['final_result']
         validated_data['raw_dice_rolls'] = roll_data['roll_details']
         validated_data['roll_input'] = roll_data['roll_formula']
         validated_data['luck_index'] = roll_data['luck_index']
 
-        return Roll.objects.create(**validated_data)
-
-    def update(self, instance, validated_data):
-        """Rolls are immutable and should not be updated."""
-        raise NotImplementedError("Roll records are immutable and cannot be updated.")
-
-    def create(self, validated_data):
-        formula_string = validated_data.pop('roll_input')
-
-        try:
-            roll_data = DiceRoller.calculate_roll(formula_string)
-
-        except InvalidRollFormula as e:
-            raise serializers.ValidationError({"roll_input": str(e)})
-
-        validated_data['roll_value'] = roll_data['final_result']
-        validated_data['raw_dice_rolls'] = roll_data['roll_details']
-        validated_data['roll_input'] = roll_data['roll_formula']
-        return Roll.objects.create(**validated_data)
-
-    def update(self, instance, validated_data):
-        """Rolls are immutable and should not be updated."""
-        raise NotImplementedError("Roll records are immutable and cannot be updated.")
-
-    def validate(self, attrs):
-        """
-        Validates the character and group belong to the current user.
-        """
-        user = self.context['request'].user
-        character = attrs.get('character')
-        group = attrs.get('group')
-        if character and character.user != user:
-            raise PermissionDenied("Character does not belong to the current user.")
-
-        if group:
-            if group.owner != user:
-                raise PermissionDenied("Group does not belong to the current user.")
-
-            if character and character.group and character.group != group:
-                raise ValidationError("Character must belong to the specified Group.")
-
-        return attrs
-
-    def create(self, validated_data):
-        """
-        Overrides create to run the DiceRoller calculation
-        before saving the object to the database.
-        """
-        # Get the formula string from the validated input
-        formula_string = validated_data.pop('roll_input')
-
-        try:
-            roll_data = DiceRoller.calculate_roll(formula_string)
-
-        except InvalidRollFormula as e:
-            # If the formula is invalid, raise a standard validation error
-            raise serializers.ValidationError({"roll_input": str(e)})
-
-        # Add the calculated values from the dice_roller to the data
-        # that will be used to create the model instance.
-
-        # 'final_result' from DiceRoller maps to 'roll_value' in the model
-        validated_data['roll_value'] = roll_data['final_result']
-
-        # 'roll_details' from DiceRoller maps to 'raw_dice_rolls' in the model
-        validated_data['raw_dice_rolls'] = roll_data['roll_details']
-
-        # 'roll_formula' from DiceRoller maps to 'roll_input' in the model
-        # (This ensures the cleaned/prefixed formula is saved)
-        validated_data['roll_input'] = roll_data['roll_formula']
-
-        # Now, validated_data contains 'character', 'group', 'roll_value',
-        # 'raw_dice_rolls', and 'roll_input'.
-
-        # This create call will now succeed because 'roll_value' is present.
-        return Roll.objects.create(**validated_data)
-
-    def update(self, instance, validated_data):
-        """Rolls are immutable and should not be updated."""
-        raise NotImplementedError("Roll records are immutable and cannot be updated.")
-
-    def validate(self, attrs):
-        """
-        Validates the character and group belong to the current user.
-        """
-        user = self.context['request'].user
-        character = attrs.get('character')
-        group = attrs.get('group')
-        if character and character.user != user:
-            raise PermissionDenied("Character does not belong to the current user.")
-
-        if group:
-            if group.owner != user:
-                raise PermissionDenied("Group does not belong to the current user.")
-
-            if character and character.group and character.group != group:
-                raise ValidationError("Character must belong to the specified Group.")
-
-        return attrs
-
-    def create(self, validated_data):
         return Roll.objects.create(**validated_data)
 
     def update(self, instance, validated_data):

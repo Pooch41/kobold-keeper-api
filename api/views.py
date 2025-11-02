@@ -27,12 +27,12 @@ def _get_analytics_queryset_and_name(user: User, character_id: str = None, group
     Safely retrieves a Roll QuerySet for analytics, enforcing that
     the requested character or group belongs to the authenticated user.
 
-    CRITICAL FIX: Uses get_object_or_404 to ensure that if a character/group
+    Uses get_object_or_404 to ensure that if a character/group
     is specified, it belongs to the user, preventing a BOLA vulnerability.
     """
 
 
-    user_owned_rolls = Roll.objects.filter(character__owner=user)
+    user_owned_rolls = Roll.objects.filter(character__user=user)
 
     if character_id:
         character = get_object_or_404(Character.objects.filter(user=user), pk=character_id)

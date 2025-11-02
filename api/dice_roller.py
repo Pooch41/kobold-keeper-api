@@ -1,9 +1,24 @@
 """
-Core utility module for parsing dice formulas and executing the rolls.
+Core utility module for parsing and executing complex dice roll formulas.
 
-This module contains the DiceRoller class, which handles complex dice notation
-(like '3d6', '1d20+5', and drop/keep modifiers like '4d6kh3') and calculates the
-final result, along with detailed component breakdowns for analytical tracking.
+This module provides the main `DiceRoller` class, which is responsible for
+parsing standard dice notation (e.g., '1d20+5'), including advanced
+drop/keep modifiers (e.g., '4d6kh3'). It calculates the final result, provides
+a detailed breakdown of all roll components, and computes a 'luck_index'
+based on the roll's deviation from the statistical average.
+
+Classes:
+    InvalidRollFormula: Custom exception raised for malformed dice strings.
+    DiceRoller: A static class that parses and executes dice formulas.
+
+Usage:
+    from .dice_roller import DiceRoller, InvalidRollFormula
+
+    try:
+        roll_data = DiceRoller.calculate_roll('2d20dl1+1d4+12')
+        print(roll_data['final_result'])
+    except InvalidRollFormula as e:
+        print(f"Error: {e}")
 """
 
 import random
@@ -26,11 +41,7 @@ class DiceRoller:
     @staticmethod
     def _parse_and_roll_dice(dice_part: str) -> Dict[str, Any]:
         """
-        Parses a single dice component string (e.g., '3d6', '4d20kh1'), executes the
-        physical roll, and applies drop/keep logic.
-
-        :param dice_part: A single dice component string.
-        :raises InvalidRollFormula: If the dice component format is invalid.
+        ... (docstring) ...
         :return: A dictionary containing details of the executed roll (rolls, total, etc.).
         """
         lower_dice_part = dice_part.lower()
@@ -56,6 +67,10 @@ class DiceRoller:
                 f"must be greater than 0 and less than the number of dice rolled ({num_dice})."
             )
 
+
+        expected_avg_per_die = (die_size + 1) / 2.0
+        roll_range_per_die = float(die_size - 1)
+
         rolls = [random.randint(1, die_size) for _ in range(num_dice)]
 
         if not drop_keep_key:
@@ -65,6 +80,9 @@ class DiceRoller:
                 'formula': dice_part,
                 'rolls': rolls,
                 'total': total,
+                'expected_avg': num_dice * expected_avg_per_die,
+                'roll_range': num_dice * roll_range_per_die,
+                'retained_sum': total
             }
 
         sorted_rolls = sorted(rolls)
@@ -80,6 +98,9 @@ class DiceRoller:
             sorted_rolls, drop_keep_amount
         )
 
+        retained_sum = sum(retained_rolls)
+        retained_count = len(retained_rolls)
+
         return {
             'component_type': 'dice',
             'formula': dice_part,
@@ -87,18 +108,16 @@ class DiceRoller:
             'rolls': rolls,
             'dropped_rolls': dropped_rolls,
             'retained_rolls': retained_rolls,
-            'total': sum(retained_rolls),
+            'total': retained_sum,
+            'expected_avg': retained_count * expected_avg_per_die,
+            'roll_range': retained_count * roll_range_per_die,
+            'retained_sum': retained_sum,
         }
 
     @classmethod
     def _process_roll_term(cls, term: str) -> Dict[str, Any]:
         """
-        Processes a single token (term) from the formula, determining if it's a
-        modifier or a dice roll, and executing the roll if necessary.
-
-        :param term: The token string (e.g., '5' or '3d6').
-        :raises InvalidRollFormula: If parsing or dice rolling fails.
-        :return: A dictionary detail containing 'total' and component data.
+        ... (docstring) ...
         """
         if term.isdigit():
             try:
@@ -118,8 +137,6 @@ class DiceRoller:
                 detail = cls._parse_and_roll_dice(term)
                 if 'total' not in detail:
                     raise InvalidRollFormula(f"Dice roll detail missing total for term: {term}")
-
-                detail['total'] = detail['total']
                 return detail
             except InvalidRollFormula as exc:
                 raise InvalidRollFormula(f"Dice component validation failed for: {term}") from exc
@@ -127,18 +144,14 @@ class DiceRoller:
                 raise InvalidRollFormula(
                     f"Internal conversion error in dice format: {term}") from exc
 
-        raise InvalidRollFormula(f"Unrecognized term: {term}")  # Removed the redundant 'else:'
+        raise InvalidRollFormula(f"Unrecognized term: {term}")
 
     @classmethod
     def calculate_roll(cls, formula: str) -> Dict[str, Any]:
         """
-        The main public method. Parses the full formula string, breaks it into
-        components, executes all rolls, and sums the results.
-
-        :param formula: The dice roll formula string (e.g., '1d20+5').
-        :raises InvalidRollFormula: If the overall formula syntax is invalid.
-        :return: A dictionary with the 'final_result', the original 'roll_formula',
-                 and a list of 'roll_details' for persistence.
+        ... (docstring) ...
+        :return: A dictionary with 'final_result', 'roll_formula',
+                 'roll_details', and 'luck_index'.
         """
         formula = formula.replace(' ', '')
         if not formula:
@@ -146,6 +159,11 @@ class DiceRoller:
 
         roll_details = []
         total = 0
+        total_dice_sum = 0.0
+        total_expected_avg = 0.0
+        total_roll_range = 0.0
+
+
         last_end = 0
 
         if formula[0] not in ('+', '-'):
@@ -172,14 +190,33 @@ class DiceRoller:
             else:
                 total += component_total
 
+            if detail.get('component_type') == 'dice':
+                dice_sum = detail.get('retained_sum', 0.0)
+                expected_avg = detail.get('expected_avg', 0.0)
+                roll_range = detail.get('roll_range', 0.0)
+
+                if sign == '-':
+                    total_dice_sum -= dice_sum
+                    total_expected_avg -= expected_avg
+                else:
+                    total_dice_sum += dice_sum
+                    total_expected_avg += expected_avg
+
+                total_roll_range += roll_range
+
             roll_details.append(detail)
 
         if last_end < len(formula):
             unconsumed_str = formula[last_end:]
             raise InvalidRollFormula(f"Formula contains invalid syntax: '{unconsumed_str}'")
 
+        final_luck_index = 0.0
+        if total_roll_range > 0:
+            final_luck_index = (total_dice_sum - total_expected_avg) / total_roll_range
+
         return {
             'roll_formula': formula.strip('+'),
             'final_result': int(total),
-            'roll_details': roll_details
+            'roll_details': roll_details,
+            'luck_index': final_luck_index # <-- The new calculated value
         }
