@@ -113,13 +113,9 @@ class RollViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         """
-        Injects the character's owner (current user) during roll creation and
-        ensures the character belongs to the user.
+        Passes validated data to the serializer to save the roll.
+        Ownership validation is handled in RollSerializer.
         """
-        character = serializer.validated_data['character']
-        if character.user != self.request.user:
-            raise PermissionDenied("You can only create rolls for your own characters.")
-
         serializer.save()
 
 

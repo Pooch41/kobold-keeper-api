@@ -311,8 +311,14 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
     new_password = serializers.CharField(required=True, write_only=True, min_length=8)
 
     def create(self, validated_data):
-        """Not used; logic is handled in .save()."""
-        raise NotImplementedError("This serializer is for password reset (update logic only).")
+        """
+        Saves the new password. The recovery key is intentionally NOT invalidated here,
+        as it is designed to be a multi-use key.
+        """
+        new_password = validated_data.get('new_password')
+        self.user.set_password(new_password)
+        self.user.save()
+        return self.user
 
     def update(self, instance, validated_data):
         """Not used; logic is handled in .save()."""
@@ -321,7 +327,6 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
     def validate(self, attrs):
         """
         Validates the username and recovery key combination.
-        Note: Renamed parameter from 'data' to 'attrs' to resolve W0237 warning.
         """
         username = attrs.get('username')
         recovery_key = attrs.get('recovery_key')
@@ -345,17 +350,6 @@ class PasswordResetWithKeySerializer(serializers.Serializer):
 
         self.user = user
         return attrs
-
-    def save(self, **kwargs):
-        """
-        Saves the new password. The recovery key is intentionally NOT invalidated here,
-        as it is designed to be a multi-use key.
-        """
-        new_password = self.validated_data.get('new_password')
-        self.user.set_password(new_password)
-        self.user.save()
-
-        return self.user
 
 
 class UserPasswordChangeSerializer(serializers.Serializer):

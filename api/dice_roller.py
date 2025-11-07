@@ -18,7 +18,7 @@ Usage:
         roll_data = DiceRoller.calculate_roll('2d20dl1+1d4+12')
         print(roll_data['final_result'])
     except InvalidRollFormula as e:
-        print(f"Error: {e}")
+        print(f'Error: {e}')
 """
 
 import random
@@ -32,8 +32,10 @@ class InvalidRollFormula(Exception):
 
 class DiceRoller:
     """
-    Core class responsible for parsing dice formulas, executing the rolls,
-    and calculating the final result.
+        Handles parsing, execution, and analysis of complex dice roll formulas.
+
+        This class is used as a static utility and is not meant to be instantiated.
+        Its main public method is `calculate_roll()`.
     """
     TOKEN_RE = re.compile(
         r"([+-])?([1-9][0-9]*[dD][1-9][0-9]*(?:(?:dl|dh|kl|kh)[1-9][0-9]*)?|[1-9][0-9]*)")
@@ -41,8 +43,27 @@ class DiceRoller:
     @staticmethod
     def _parse_and_roll_dice(dice_part: str) -> Dict[str, Any]:
         """
-        ... (docstring) ...
-        :return: A dictionary containing details of the executed roll (rolls, total, etc.).
+        Parses a single dice component, executes the roll, and applies drop/keep logic.
+
+        Args:
+            dice_part (str): A single dice component string (e.g., '3d6', '4d20kh1').
+
+        Raises:
+            InvalidRollFormula: If the dice component format is invalid or the
+                                drop/keep amount is illogical (e.g., >= num_dice).
+
+        Return:
+            Dict[str, Any]: A dictionary detailing the component's results, including:
+                - 'component_type': 'dice'
+                - 'formula': The original dice_part string.
+                - 'rolls': A list of all dice rolled (e.g., [1, 5, 6]).
+                - 'total': The final sum after applying drop/keep logic.
+                - 'expected_avg': The theoretical average for the *retained* dice.
+                - 'roll_range': The theoretical range (max - min) for the *retained* dice.
+                - 'retained_sum': The final sum (identical to 'total').
+                - (optional) 'drop_keep': The modifier used (e.g., 'kh3').
+                - (optional) 'dropped_rolls': A list of dropped rolls.
+                - (optional) 'retained_rolls': A list of kept rolls.
         """
         lower_dice_part = dice_part.lower()
         match_dice = re.match(r"("
@@ -117,7 +138,20 @@ class DiceRoller:
     @classmethod
     def _process_roll_term(cls, term: str) -> Dict[str, Any]:
         """
-        ... (docstring) ...
+        Processes a single term (e.g., '3d6' or '5') from the full formula.
+
+        Dispatches to `_parse_and_roll_dice` for dice terms or handles
+        it as a simple modifier.
+
+        Args:
+            term (str): The individual component (e.g., '4d6kh3' or '12').
+
+        Raises:
+            InvalidRollFormula: If the term is not a valid number/dice string.
+
+        Returns:
+            Dict[str, Any]: A dictionary detailing the term's results, including
+                            a 'total' and 'component_type'.
         """
         if term.isdigit():
             try:
@@ -149,9 +183,24 @@ class DiceRoller:
     @classmethod
     def calculate_roll(cls, formula: str) -> Dict[str, Any]:
         """
-        ... (docstring) ...
-        :return: A dictionary with 'final_result', 'roll_formula',
-                 'roll_details', and 'luck_index'.
+        Parses a full dice formula, aggregates all components, and calculates results.
+
+        This is the main public method of the class. It handles complex
+        formulas like '2d20dl1+1d4+12'.
+
+        Args:
+            formula (str): The complete dice formula string.
+
+        Raises:
+            InvalidRollFormula: If the formula is empty or contains invalid syntax.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing:
+                - 'roll_formula': The cleaned, original formula.
+                - 'final_result': The final integer sum of all components.
+                - 'roll_details': A list of component dictionaries.
+                - 'luck_index': A float representing the roll's deviation
+                                from the statistical average.
         """
         formula = formula.replace(' ', '')
         if not formula:
@@ -218,5 +267,5 @@ class DiceRoller:
             'roll_formula': formula.strip('+'),
             'final_result': int(total),
             'roll_details': roll_details,
-            'luck_index': final_luck_index # <-- The new calculated value
+            'luck_index': final_luck_index
         }
