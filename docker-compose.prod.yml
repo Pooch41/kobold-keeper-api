@@ -4,52 +4,43 @@ services:
     container_name: kobold_keeper_migrate_runner
     command: python manage.py migrate --noinput
     env_file:
-      - .env
+      - .env  # Reads all settings from .env
     restart: "no"
 
-
+  # 2. Main Django API Server (Gunicorn)
   api:
     image: pooch41/kobold-keeper-api-api:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: kobold_keeper_api
     command: /usr/local/bin/start.sh
     ports:
-      - "${APP_PORT}:8000"
+      - "${APP_PORT}:8000" # Reads APP_PORT from .env (which you set to 80)
     env_file:
-      - .env
+      - .env  # Reads all settings from .env
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_completed_successfully # Waits for migrations
     restart: always
 
   # 3. Celery Worker Service
   worker:
     image: pooch41/kobold-keeper-api-worker:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: kobold_keeper_worker
     command: celery -A kobold_keeper worker -l info
     env_file:
-      - .env
+      - .env  # Reads all settings from .env
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_completed_successfully # Waits for migrations
     restart: always
 
-
+  # 4. Celery Beat Service
   beat:
     image: pooch41/kobold-keeper-api-beat:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: kobold_keeper_beat
     command: celery -A kobold_keeper beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
     env_file:
-      - .env
+      - .env  # Reads all settings from .env
     depends_on:
       migrate:
-        condition: service_completed_successfully
+        condition: service_completed_successfully # Waits for migrations
     restart: always

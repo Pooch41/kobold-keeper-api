@@ -29,15 +29,8 @@ COPY start.sh /usr/local/bin/start.sh
 RUN sed -i 's/\r$//' /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 
-
+# Copy the entire project
 COPY . /app/
-
-
-COPY ./api/dice_roller.py /app/api/dice_roller.py
-COPY ./api/serializers.py /app/api/serializers.py
-COPY ./api/views.py /app/api/views.py
-COPY ./api/dice_reader.py /app/api/dice_reader.py
-
 
 # Set file ownership for non-root user access
 RUN chown -R django:django /app
@@ -47,5 +40,5 @@ RUN chown django:django /usr/local/bin/start.sh
 USER django
 
 # Stage 3: Container Entrypoint
-# Execute the custom startup script
+# Execute the custom startup script (will be overridden by worker/beat)
 CMD ["/usr/local/bin/start.sh"]

@@ -27,12 +27,12 @@ def _get_analytics_queryset_and_name(user: User, character_id: str = None, group
     Safely retrieves a Roll QuerySet for analytics, enforcing that
     the requested character or group belongs to the authenticated user.
 
-    CRITICAL FIX: Uses get_object_or_404 to ensure that if a character/group
+    Uses get_object_or_404 to ensure that if a character/group
     is specified, it belongs to the user, preventing a BOLA vulnerability.
     """
 
 
-    user_owned_rolls = Roll.objects.filter(character__owner=user)
+    user_owned_rolls = Roll.objects.filter(character__user=user)
 
     if character_id:
         character = get_object_or_404(Character.objects.filter(user=user), pk=character_id)
@@ -113,13 +113,9 @@ class RollViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         """
-        Injects the character's owner (current user) during roll creation and
-        ensures the character belongs to the user.
+        Passes validated data to the serializer to save the roll.
+        Ownership validation is handled in RollSerializer.
         """
-        character = serializer.validated_data['character']
-        if character.user != self.request.user:
-            raise PermissionDenied("You can only create rolls for your own characters.")
-
         serializer.save()
 
 

@@ -16,7 +16,6 @@ from pathlib import Path
 from kombu import Queue, Exchange
 
 from dotenv import load_dotenv
-
 load_dotenv()
 secret_key = os.getenv('SECRET_KEY')
 
