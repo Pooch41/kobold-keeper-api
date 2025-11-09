@@ -1,0 +1,98 @@
+services:
+  # 1. Local Postgres Database
+  db:
+    image: postgres:15-alpine
+    container_name: kobold_local_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    restart: always
+
+  # 2. Local Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: kobold_local_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 3. Migration Runner
+  migrate:
+    image: pooch41/kobold-keeper-api-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: sh -c "while ! nc -z db 5432; do sleep 1; done; python manage.py migrate --noinput"
+    env_file:
+      - .env
+    restart: "no"
+    depends_on:
+      - db
+
+  # 4. Main Django API Server (Gunicorn)
+  api:
+    image: pooch41/kobold-keeper-api-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobold_keeper_api_local
+    command: /usr/local/bin/start.sh
+    ports:
+      - "${APP_PORT}:8000"
+    env_file:
+      - .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: always
+
+  # 5. Celery Worker Service
+  worker:
+    image: pooch41/kobold-keeper-api-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobold_keeper_worker_local
+    command: celery -A kobold_keeper worker -l info
+    env_file:
+      - .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: always
+
+  # 6. Celery Beat Service
+  beat:
+    image: pooch41/kobold-keeper-api-beat:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kobold_keeper_beat_local
+    command: celery -A kobold_keeper beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
+    env_file:
+      - .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    restart: always
+
+# Define the persistent volume for Postgres data
+volumes:
+  postgres_data:

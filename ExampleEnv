@@ -1,0 +1,17 @@
+This is an example file.
+
+Copy this to a new file named .env and fill in the values.
+
+SECRET_KEY='a_new_local_secret_key'
+POSTGRES_PASSWORD='a_strong_password'
+POSTGRES_USER=kobold_keeper
+POSTGRES_DB=kobold_vault
+
+DB_HOST=db
+DB_PORT=5432
+
+APP_PORT=8000
+DEBUG=True
+
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/1
