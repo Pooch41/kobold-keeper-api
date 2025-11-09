@@ -58,7 +58,7 @@ In a separate terminal, run this command to create your local admin account:
 This project uses a two-file system for safe, repeatable deployments.
 
 * ``docker-compose.dev.yml``: Used **locally** to **build** and **push** images.  
-* ``docker-compose.prod.yml``: Used **remotely** (on your server) to **pull** and **run** images.
+* ``docker-compose.yml``: Used **remotely** (on your server) to **pull** and **run** images.
 
 ## **1\. (Local) Build & Push New Images**
 
@@ -74,23 +74,23 @@ After making code changes, you must build the new, secure images and push them t
 
 ## **2\. (Remote) Deploy New Images on Server**
 
-SSH into your AWS server and run the following commands. These use the server's docker-compose.prod.yml file.  
+SSH into your AWS server and run the following commands. These use the server's docker-compose.yml file.  
 #### 1. Navigate to your project directory  
 ``cd /path/to/your/project``
 
 #### 2\. Pull the new images you just pushed  
-``docker-compose \-f docker-compose.prod.yml pull``
+``docker-compose \-f docker-compose.yml pull``
 
 #### 3\. Stop and remove the old containers  
-``docker-compose \-f docker-compose.prod.yml down``
+``docker-compose \-f docker-compose.yml down``
 
 #### 4\. Start all services with the new images (in detached mode)  
 (This will automatically run migrations first)  
 
-``docker-compose \-f docker-compose.prod.yml up \-d``
+``docker-compose \-f docker-compose.yml up \-d``
 
 #### 5\. Collect any new static files  
-``docker-compose \-f docker-compose.prod.yml exec api python manage.py collectstatic \--noinput``
+``docker-compose \-f docker-compose.yml exec api python manage.py collectstatic \--noinput``
 
 #### 6\. (Optional) Clean up old, unused images  
 ``docker image prune``
@@ -126,7 +126,7 @@ To monitor the activity of all services:
 | testing/ | All pytest and unittest files. |
 | Dockerfile | The single, multi-stage build recipe for all app images. |
 | docker-compose.dev.yml | **Local:** Runs the full stack (app, db, redis) and builds images. |
-| docker-compose.prod.yml | **Remote:** Runs the app services only (pulls images). |
+| docker-compose.yml | **Remote:** Runs the app services only (pulls images). |
 | .dockerignore | **Security:** Prevents secrets, tests, and git history from being built into images. |
 
 ## **🤝 Contribution**
