@@ -1,66 +1,72 @@
 services:
-  # 1. Local Postgres Database
+  # 1. Database Service (PostgreSQL)
   db:
     image: postgres:15-alpine
     container_name: kobold_local_db
+    env_file:
+      - .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
-    restart: always
 
-  # 2. Local Redis Cache
+      - ./postgres_data_local:/var/lib/postgresql/data/
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Cache Service (Redis)
   redis:
     image: redis:7-alpine
     container_name: kobold_local_redis
-    ports:
-      - "6379:6379"
-    restart: always
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # 3. Migration Runner
+  # 3. Migration Service (Runs ONCE)
   migrate:
-    image: pooch41/kobold-keeper-api-api:latest
     build:
       context: .
       dockerfile: Dockerfile
-    command: sh -c "while ! nc -z db 5432; do sleep 1; done; python manage.py migrate --noinput"
+    image: pooch41/kobold-keeper-api-api:latest # Tag, but built locally
+    container_name: migrate-1
+    command: /bin/sh -c "while ! nc -z db 5432; do echo 'Waiting for PostgreSQL...'; sleep 1; done; echo 'PostgreSQL started.'; python manage.py migrate --noinput"
     env_file:
       - .env
-    restart: "no"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   # 4. Main Django API Server (Gunicorn)
   api:
-    image: pooch41/kobold-keeper-api-api:latest
     build:
       context: .
       dockerfile: Dockerfile
+    image: pooch41/kobold-keeper-api-api:latest # Tag, but built locally
     container_name: kobold_keeper_api_local
-    command: /usr/local/bin/start.sh
-    ports:
-      - "${APP_PORT}:8000"
     env_file:
       - .env
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+    volumes:
+      - ./testing:/app/testing
     depends_on:
       migrate:
         condition: service_completed_successfully
-      db:
-        condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
   # 5. Celery Worker Service
   worker:
-    image: pooch41/kobold-keeper-api-worker:latest
     build:
       context: .
       dockerfile: Dockerfile
+    image: pooch41/kobold-keeper-api-worker:latest # Tag, but built locally
     container_name: kobold_keeper_worker_local
     command: celery -A kobold_keeper worker -l info
     env_file:
@@ -68,18 +74,16 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      db:
-        condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
   # 6. Celery Beat Service
   beat:
-    image: pooch41/kobold-keeper-api-beat:latest
     build:
       context: .
       dockerfile: Dockerfile
+    image: pooch41/kobold-keeper-api-beat:latest # Tag, but built locally
     container_name: kobold_keeper_beat_local
     command: celery -A kobold_keeper beat -l info --scheduler django_celery_beat.schedulers.DatabaseScheduler
     env_file:
@@ -87,12 +91,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      db:
-        condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
-# Define the persistent volume for Postgres data
-volumes:
-  postgres_data:
+volumes: {}

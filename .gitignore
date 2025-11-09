@@ -212,3 +212,4 @@ __marimo__/
 api/migrations
 staticfiles
 test_cron_jobs.sh
+postgres_data_local

@@ -1,123 +1,148 @@
-# Kobold Keeper API
-
 [![Build Status](https://img.shields.io/badge/Status-Feature%20Complete-green)](https://github.com/pooch41/kobold-keeper-api)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub contributors](https://img.shields.io/github/contributors/Pooch41/kobold-keeper-api)](https://github.com/Pooch41/kobold-keeper-api/graphs/contributors)[![Project Maintenance](https://img.shields.io/maintenance/yes/2025)](https://github.com/your-repo/kobold-keeper-api)
 
----
 
-## 🎲 What is Kobold Keeper?
+# **Kobold Keeper API**
 
-Kobold Keeper is a powerful, self-hosted API designed to manage and automate dice-rolling tasks for **role-playing game (RPG) sessions**, focusing primarily on game master (GM) utility. It serves as a backend hub for various tools, allowing GMs to centralize data, run complex dice rolls, and review dice rolling statistics per group, character or even globally.
+## **🎲 What is Kobold Keeper?**
 
+Kobold Keeper is a powerful, self-hosted API designed to manage and automate dice-rolling tasks for **role-playing game (RPG) sessions**, focusing primarily on game master (GM) utility. It serves as a backend hub for various tools, allowing GMs to centralize data, run complex dice rolls, and review dice rolling statistics per group, character or even globally.  
 This project is built with Python and Django Rest Framework (DRF), offering a robust, secure, and scalable foundation for your digital tabletop needs.
 
-### Key Features
+### **Key Features**
 
-* **Advanced Dice Roller:** Supports complex algebraic expressions, `drop/keep` logic, and modifiers (e.g., `3d6 + 5`, `2d20kh1`, `1d8 + 5d6 + 4`).
-* **Roll analytics:** Allows users to review their past and present rolls in terms of raw dice breakdown, averages and comparisons versus statistical averages of the standard dice type
-* **Secure User Management:** Full authentication and authorization via Django's built-in system and custom JWT logic.
+* **Advanced Dice Roller:** Supports complex algebraic expressions, drop/keep logic, and modifiers (e.g., 3d6 \+ 5, 2d20kh1, 1d8 \+ 5d6 \+ 4).  
+* **Roll analytics:** Allows users to review their past and present rolls in terms of raw dice breakdown, averages and comparisons versus statistical averages of the standard dice type.  
+* **Secure User Management:** Full authentication and authorization via Django's built-in system and JWT.  
 * **Asynchronous Tasks (Celery):** Handles long-running or resource-intensive tasks, such as large data exports or complex simulations, without blocking the main API thread.
 
----
+## **⚔️ Getting Started (Local Development)**
 
-## ⚔️ Getting Started
+To run Kobold Keeper locally for development, you'll need **Docker** and **Docker Compose**. This setup ensures all dependencies (**PostgreSQL** database, **Redis** cache, **Celery worker**, and **Celery Beat scheduler**) are managed easily using the `docker-compose.dev.yml` file.
 
-To run Kobold Keeper locally for development or as a self-hosted instance, you'll need **Docker** and **Docker Compose**. This setup ensures all dependencies (**PostgreSQL** database, **Redis** cache, **Celery worker**, and **Celery Beat scheduler**) are managed easily.
+### **Prerequisites**
 
-### Prerequisites
+1. **Docker** and **Docker Compose** installed on your system.  
+2. A .env file created in the project root (see ExampleEnv for structure).
 
-1.  **Docker** and **Docker Compose** installed on your system.
-2.  A `.env` file created in the project root (see `Example.env` for structure).
+### **1\. Clone the Repository**
 
-### 1. Clone the Repository
+``git clone \[https://github.com/Pooch41/kobold-keeper-api.git\](https://github.com/Pooch41/kobold-keeper-api.git)``  
 
-```bash
-git clone https://github.com/Pooch41/kobold-keeper-api.git
-cd kobold-keeper-api
-```
+``cd kobold-keeper-api``
 
-### 2. Configure Environment
+### **2\. Configure Environment**
 
-Copy the example environment file and update the variables for production or development use.
+Copy the example environment file. This new .env file is already in .gitignore and will **never** be committed.  
+cp example.env .env  
+#### Edit your new .env file with your local passwords  
+#### Set DEBUG=True
 
-```bash
-cp Example.env .env
-# Edit .env to set secure keys, database credentials, and any external service tokens.
-```
+### **3\. Build and Run Local Services**
 
-### 3. Build and Run Services (Recommended)
+Execute the following command to build the Docker images and start all services (api, worker, beat, db, redis) in detached mode.  
+#### Use the \-f flag to specify the dev file  
+``docker-compose \-f docker-compose.dev.yml up \--build \-d``
 
-Execute the following command to build the Docker images and start all five required services (`api`, `worker`, `beat`, `db`, `redis`) in detached mode:
-```bash
-docker compose up --build -d
-```
+The API will be available @ http://localhost:8000.  
+**API Schema (Swagger UI):** http://localhost:8000/api/schema/swagger-ui/
 
-**Note:** The `start.sh` script inside the `api` container automatically handles waiting for the database, running `migrate`, and running `collectstatic` on startup.
+### **4\. Create a Superuser**
 
-The API will be available @ `http://localhost:8000`.
+In a separate terminal, run this command to create your local admin account:  
+``docker-compose \-f docker-compose.dev.yml exec api python manage.py createsuperuser``
 
-**API Schema (Swagger UI):** `http://localhost:8000/api/schema/swagger-ui/`
+## **🚀 Deployment (Remote)**
 
-### 4. Access the API
+This project uses a two-file system for safe, repeatable deployments.
 
-Once the services are running and healthy (this may take a few seconds), the API will be available at:
+* ``docker-compose.dev.yml``: Used **locally** to **build** and **push** images.  
+* ``docker-compose.prod.yml``: Used **remotely** (on your server) to **pull** and **run** images.
 
-**API Root:** `http://localhost:8000/api/`.
+## **1\. (Local) Build & Push New Images**
 
-**API Schema (Swagger UI):** `http://localhost:8000/api/schema/swagger-ui/`
+After making code changes, you must build the new, secure images and push them to Docker Hub. The .dockerignore file ensures your final images are small and secure (no .env, testing/, or .git files are included).  
+#### 1. (Optional) Log in to Docker Hub  
+``docker login \--username {your_username}``
 
+#### 2. Build new images using the dev file  
+``docker-compose \-f docker-compose.dev.yml build``
 
-## 🧙‍♂️ Testing
-The project uses **Pytest** for unit and integration testing, configured via `pytest.ini`. All tests must be executed within the Docker environment to ensure connectivity to the database.
+#### 3. Push the new images to Docker Hub  
+``docker-compose \-f docker-compose.dev.yml push``
 
-### Running Pytest
-Use `docker compose run --rm api pytest` to execute the tests inside a temporary container.
+## **2\. (Remote) Deploy New Images on Server**
 
+SSH into your AWS server and run the following commands. These use the server's docker-compose.prod.yml file.  
+#### 1. Navigate to your project directory  
+``cd /path/to/your/project``
 
-## ⚙️ Celery Workers & Scheduled Tasks
+#### 2\. Pull the new images you just pushed  
+``docker-compose \-f docker-compose.prod.yml pull``
+
+#### 3\. Stop and remove the old containers  
+``docker-compose \-f docker-compose.prod.yml down``
+
+#### 4\. Start all services with the new images (in detached mode)  
+(This will automatically run migrations first)  
+
+``docker-compose \-f docker-compose.prod.yml up \-d``
+
+#### 5\. Collect any new static files  
+``docker-compose \-f docker-compose.prod.yml exec api python manage.py collectstatic \--noinput``
+
+#### 6\. (Optional) Clean up old, unused images  
+``docker image prune``
+
+## **🧙‍♂️ Testing**
+
+The project uses **Pytest** for unit and integration testing. Tests are run *inside* the running api container.
+
+### **Running Pytest**
+
+While your local stack is running, open a **second terminal** and run:  
+``docker-compose \-f docker-compose.dev.yml exec api pytest``
+
+## **⚙️ Celery Workers & Scheduled Tasks**
 
 The application uses Celery for background processing.
 
-* **Worker:** The `worker` service executes tasks asynchronously (e.g., large-scale data computations).
+* **Worker:** The worker service executes tasks asynchronously.  
+* **Beat:** The beat service is the scheduler that polls the database for periodic tasks.
 
-* **Beat:** The `beat` service is the scheduler that polls the database for periodic tasks defined in `django_celery_beat` and queues them for the worker.
+To monitor the activity of all services:
 
-To monitor the activity of the workers and beat scheduler:
+### **View all logs in real-time**
 
-### View all logs in real-time
-```bash
-docker compose logs -f
-```
-## 🛠️ Project Structure
+``docker-compose \-f docker-compose.dev.yml logs \-f``
 
-This project follows a standard Django structure with clearly defined application responsibilities:
+## **🛠️ Project Structure**
 
-| Directory | Description |
-| :--- | :--- |
-| `api/` | Main application logic for Django REST Framework views, serializers, and permissions, including business logic related to dice rolling and authentication. |
-| `kobold_keeper/` | Core Django settings, URLs, and root configuration for the entire project, **including Celery setup**. |
-| `docs/` | **Future home for dedicated documentation (e.g., `API_REFERENCE.md`).** |
-| `docker-compose.yml` | Defines the multi-container environment (API, DB, Cache, Worker, Beat). |
----
+| File | Description |
+| :---- | :---- |
+| api/ | Main Django app for views, serializers, and models. |
+| kobold\_keeper/ | Core Django project settings, URLs, and Celery setup. |
+| testing/ | All pytest and unittest files. |
+| Dockerfile | The single, multi-stage build recipe for all app images. |
+| docker-compose.dev.yml | **Local:** Runs the full stack (app, db, redis) and builds images. |
+| docker-compose.prod.yml | **Remote:** Runs the app services only (pulls images). |
+| .dockerignore | **Security:** Prevents secrets, tests, and git history from being built into images. |
 
-## 🤝 Contribution
+## **🤝 Contribution**
 
-We welcome contributions! As an open-source project, your help is invaluable for improving stability, adding features, and refining the user experience.
+We welcome contributions\! As an open-source project, your help is invaluable.
 
-1.  **Fork** the repository and clone your fork.
-2.  Create your feature branch (e.g., `git checkout -b feature/new-dice-logic`).
-3.  Commit your changes (`git commit -am 'Refactor: Improved logic for drop/keep rolls'`).
-4.  Create a new **Pull Request** to the **main development branch**.
+1. **Fork** the repository and clone your fork.  
+2. Create your feature branch (git checkout \-b feature/new-dice-logic).  
+3. Commit your changes (git commit \-am 'Refactor: Improved logic').  
+4. Create a new **Pull Request** to the **main development branch**.
 
-### ❗Code Quality Standards
-We enforce strict quality checks using **Pylint**. As configured in `pyproject.toml`. Before submitting a pull request, please ensure your changes pass the quality checks:
+### **❗Code Quality Standards**
 
-```bash
-docker compose run --rm api pylint kobold_keeper api
-```
+We enforce strict quality checks using **Pylint**. Before submitting a pull request, please ensure your changes pass the quality checks:  
+``docker-compose \-f docker-compose.dev.yml exec api pylint kobold\_keeper api``
 
-## 📜 License
+## **📜 License**
 
-Kobold Keeper API is released under the MIT License. See the `LICENSE` file for more details.
-
+Kobold Keeper API is released under the MIT License. See the LICENSE file for more details.
