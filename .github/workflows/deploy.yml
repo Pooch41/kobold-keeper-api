@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on:
   push:
@@ -17,6 +17,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+
       - name: Build and Push API
         uses: docker/build-push-action@v5
         with:
@@ -24,6 +25,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: pooch41/kobold-keeper-api-api:latest
+
 
       - name: Build and Push Worker
         uses: docker/build-push-action@v5
@@ -33,6 +35,7 @@ jobs:
           push: true
           tags: pooch41/kobold-keeper-api-worker:latest
 
+
       - name: Build and Push Beat
         uses: docker/build-push-action@v5
         with:
@@ -40,15 +43,3 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: pooch41/kobold-keeper-api-beat:latest
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
