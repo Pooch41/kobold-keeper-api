@@ -1,7 +1,7 @@
 [![Build Status](https://img.shields.io/badge/Status-Feature%20Complete-green)](https://github.com/pooch41/kobold-keeper-api)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub contributors](https://img.shields.io/github/contributors/Pooch41/kobold-keeper-api)](https://github.com/Pooch41/kobold-keeper-api/graphs/contributors)
-
+![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)
 
 # **Kobold Keeper API**
 
